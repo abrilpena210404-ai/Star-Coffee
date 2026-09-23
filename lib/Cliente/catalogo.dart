@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:star_coffee/Cliente/DetalleProducto.dart';
 import '../Styles/Styles.dart';
 import 'package:star_coffee/basedatos/database_helper.dart';
 
@@ -29,7 +30,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
     if (categoriaSeleccionada == 'Todos') {
       return productos;
     }
-
     return productos
         .where((producto) => producto['categoria'] == categoriaSeleccionada)
         .toList();
@@ -56,7 +56,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                       color: AppColores.cafeOscuro,
                     ),
                   ),
-
                   const Expanded(
                     child: Text(
                       'Catálogo',
@@ -68,7 +67,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                       ),
                     ),
                   ),
-
                   IconButton(
                     onPressed: () {},
                     icon: const Icon(
@@ -80,7 +78,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                 ],
               ),
             ),
-
             // BUSCADOR
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
@@ -147,12 +144,21 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                 ),
                 itemBuilder: (context, index) {
                   final producto = productosFiltrados[index];
-
-                  return tarjetaProducto(
-                    nombre: producto['nombre'] ?? '',
-                    descripcion: producto['descripcion'] ?? '',
-                    precio: (producto['precio'] as num).toDouble(),
-                    imagen: producto['imagen'] ?? '',
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DetalleProducto(producto: producto),
+                        ),
+                      );
+                    },
+                    child: tarjetaProducto(
+                      nombre: producto['nombre'],
+                      descripcion: producto['descripcion'],
+                      precio: (producto['precio'] as num).toDouble(),
+                      imagen: producto['imagen'] ?? '',
+                    ),
                   );
                 },
               ),
@@ -212,7 +218,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
 
   Widget botonCategoria(String categoria) {
     final seleccionado = categoriaSeleccionada == categoria;
-
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -302,7 +307,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                           ),
                         ),
                 ),
-
                 Positioned(
                   top: 9,
                   right: 9,
@@ -327,7 +331,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
               ],
             ),
           ),
-
           Expanded(
             flex: 5,
             child: Padding(
@@ -344,10 +347,8 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                       fontWeight: FontWeight.bold,
                       color: AppColores.textoPrincipal,
                     ),
-                  ),
-
+                  ), 
                   const SizedBox(height: 4),
-
                   Text(
                     descripcion,
                     maxLines: 2,
@@ -360,7 +361,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                   ),
 
                   const Spacer(),
-
                   Row(
                     children: [
                       Text(
@@ -373,7 +373,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                       ),
 
                       const Spacer(),
-
                       Container(
                         width: 31,
                         height: 31,

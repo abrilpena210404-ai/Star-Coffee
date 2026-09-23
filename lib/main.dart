@@ -4,13 +4,11 @@ import 'Login.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
   runApp(const StarCoffeeApp());
 }
 
 class StarCoffeeApp extends StatelessWidget {
   const StarCoffeeApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

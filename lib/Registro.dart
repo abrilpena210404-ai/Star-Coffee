@@ -75,14 +75,12 @@ class _RegistroState extends State<Registro> {
         mostrarMensaje('Este correo ya está registrado');
         return;
       }
-
       await DatabaseHelper.instancia.registrarUsuario(
         nombre: nombre,
         correo: correo,
         telefono: telefono,
         password: password,
       );
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -95,9 +93,7 @@ class _RegistroState extends State<Registro> {
       );
     } catch (e) {
       print('ERROR AL REGISTRAR: $e');
-
       if (!mounted) return;
-
       mostrarMensaje('Error: $e');
     } finally {
       if (mounted) {
@@ -124,13 +120,11 @@ class _RegistroState extends State<Registro> {
           child: Column(
             children: [
               const SizedBox(height: 20),
-
               const Text(
                 'Crear Cuenta',
                 style: AppEstilos.tituloPrincipal,
                 textAlign: TextAlign.center,
               ),
-
               const SizedBox(height: 6),
 
               const Text(

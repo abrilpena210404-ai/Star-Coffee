@@ -4,14 +4,12 @@ import '../Styles/Styles.dart';
 
 class InicioCliente extends StatefulWidget {
   const InicioCliente({super.key});
-
   @override
   State<InicioCliente> createState() => _InicioClienteState();
 }
 
 class _InicioClienteState extends State<InicioCliente> {
   String nombreUsuario = 'Cliente';
-
   @override
   void initState() {
     super.initState();
@@ -21,7 +19,6 @@ class _InicioClienteState extends State<InicioCliente> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColores.cremaClaro,
-
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 25),
@@ -46,9 +43,7 @@ class _InicioClienteState extends State<InicioCliente> {
                         size: 27,
                       ),
                     ),
-
                     const SizedBox(width: 12),
-
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,7 +55,6 @@ class _InicioClienteState extends State<InicioCliente> {
                               color: AppColores.textoSecundario,
                             ),
                           ),
-
                           Text(
                             nombreUsuario,
                             maxLines: 1,
@@ -72,15 +66,6 @@ class _InicioClienteState extends State<InicioCliente> {
                             ),
                           ),
                         ],
-                      ),
-                    ),
-
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(
-                        Icons.notifications_none_rounded,
-                        color: AppColores.cafeOscuro,
-                        size: 29,
                       ),
                     ),
                   ],
@@ -202,7 +187,6 @@ class _InicioClienteState extends State<InicioCliente> {
               ),
 
               const SizedBox(height: 28),
-
               // CATEGORÍAS
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 22),
@@ -254,7 +238,6 @@ class _InicioClienteState extends State<InicioCliente> {
                         color: AppColores.textoPrincipal,
                       ),
                     ),
-
                     TextButton(
                       onPressed: () {},
                       child: const Text(
@@ -328,9 +311,7 @@ class _InicioClienteState extends State<InicioCliente> {
                   child: const Row(
                     children: [
                       ContainerPromocion(),
-
                       SizedBox(width: 15),
-
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,9 +324,7 @@ class _InicioClienteState extends State<InicioCliente> {
                                 color: AppColores.textoPrincipal,
                               ),
                             ),
-
                             SizedBox(height: 5),
-
                             Text(
                               'Disfruta el doble de sabor este viernes.',
                               style: TextStyle(
@@ -435,9 +414,7 @@ class _InicioClienteState extends State<InicioCliente> {
             ),
             child: Icon(icono, color: AppColores.cafeOscuro, size: 29),
           ),
-
           const SizedBox(height: 7),
-
           Text(
             titulo,
             style: const TextStyle(

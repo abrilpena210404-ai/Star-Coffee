@@ -2,34 +2,43 @@ import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
 import '../basedatos/database_helper.dart';
 import 'package:star_coffee/Admin/Productos.dart';
+import 'package:star_coffee/Admin/Usuarios.dart';
+import 'package:star_coffee/Admin/Categorias.dart';
+import 'package:star_coffee/Admin/Promociones.dart';
 
 class InicioAdmin extends StatefulWidget {
   const InicioAdmin({super.key});
-
   @override
   State<InicioAdmin> createState() => _InicioAdminState();
 }
 
 class _InicioAdminState extends State<InicioAdmin> {
   int usuariosRegistrados = 0;
+  int totalProductos = 0;
+  int totalCategorias = 0;
+  int totalPromociones = 0;
 
   @override
   void initState() {
     super.initState();
-    cargarUsuarios();
+    cargarDatos();
   }
 
-  Future<void> cargarUsuarios() async {
+  Future<void> cargarDatos() async {
     final usuarios = await DatabaseHelper.instancia.obtenerUsuarios();
+    final productos = await DatabaseHelper.instancia.contarProductos();
+    final categorias = await DatabaseHelper.instancia.contarCategorias();
+    final promociones = await DatabaseHelper.instancia.contarPromociones();
 
     final clientes = usuarios.where((usuario) {
       return usuario['rol'] == 'cliente';
     }).toList();
-
     if (!mounted) return;
-
     setState(() {
       usuariosRegistrados = clientes.length;
+      totalProductos = productos;
+      totalCategorias = categorias;
+      totalPromociones = promociones;
     });
   }
 
@@ -37,39 +46,30 @@ class _InicioAdminState extends State<InicioAdmin> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColores.cremaClaro,
-
       body: SafeArea(
         child: Column(
           children: [
-            // CONTENIDO
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
-
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-
                   children: [
-                    // HEADER
+                    // parte de arriba de la pantalla
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
                       children: [
                         Row(
                           children: [
                             Container(
                               width: 45,
                               height: 45,
-
                               decoration: BoxDecoration(
                                 color: AppColores.beige,
-
                                 borderRadius: BorderRadius.circular(14),
                               ),
-
                               child: const Icon(
                                 Icons.local_cafe,
-
                                 color: AppColores.cafeOscuro,
                               ),
                             ),
@@ -78,26 +78,19 @@ class _InicioAdminState extends State<InicioAdmin> {
 
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-
                               children: [
                                 const Text(
                                   'Star Coffee',
-
                                   style: TextStyle(
                                     fontSize: 22,
-
                                     fontWeight: FontWeight.bold,
-
                                     color: AppColores.textoPrincipal,
                                   ),
                                 ),
-
                                 Text(
                                   'ADMINISTRADOR',
-
                                   style: AppEstilos.subtitulo.copyWith(
                                     fontSize: 11,
-
                                     letterSpacing: 2,
                                   ),
                                 ),
@@ -110,10 +103,8 @@ class _InicioAdminState extends State<InicioAdmin> {
                           children: [
                             const Text(
                               'Hola, Admin',
-
                               style: TextStyle(
                                 color: AppColores.textoPrincipal,
-
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -122,10 +113,8 @@ class _InicioAdminState extends State<InicioAdmin> {
 
                             CircleAvatar(
                               backgroundColor: AppColores.cafeOscuro,
-
                               child: const Icon(
                                 Icons.person,
-
                                 color: Colors.white,
                               ),
                             ),
@@ -139,19 +128,15 @@ class _InicioAdminState extends State<InicioAdmin> {
                     // TITULO
                     const Text(
                       'Inicio',
-
                       style: TextStyle(
                         fontSize: 30,
-
                         fontWeight: FontWeight.bold,
-
                         color: AppColores.textoPrincipal,
                       ),
                     ),
 
                     const Text(
                       'Resumen de tu cafetería en tiempo real.',
-
                       style: AppEstilos.subtitulo,
                     ),
 
@@ -160,25 +145,18 @@ class _InicioAdminState extends State<InicioAdmin> {
                     // BANNER
                     Container(
                       height: 170,
-
                       width: double.infinity,
-
                       decoration: BoxDecoration(
                         color: AppColores.cafeMedio,
-
                         borderRadius: BorderRadius.circular(22),
                       ),
-
                       child: const Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
-
                           children: [
                             Icon(
                               Icons.local_cafe_rounded,
-
                               size: 60,
-
                               color: Colors.white,
                             ),
 
@@ -186,14 +164,10 @@ class _InicioAdminState extends State<InicioAdmin> {
 
                             Text(
                               'Todo funciona mejor\ncon un gran café',
-
                               textAlign: TextAlign.center,
-
                               style: TextStyle(
                                 color: Colors.white,
-
                                 fontSize: 22,
-
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -204,48 +178,32 @@ class _InicioAdminState extends State<InicioAdmin> {
 
                     const SizedBox(height: 25),
 
-                    // ESTADISTICAS
+                    // Tarjeta de ESTADISTICAS
                     GridView.count(
                       shrinkWrap: true,
-
                       physics: const NeverScrollableScrollPhysics(),
-
                       crossAxisCount: 2,
-
                       crossAxisSpacing: 14,
-
                       mainAxisSpacing: 14,
-
                       children: [
                         tarjetaEstadistica(
                           'Total Productos',
-
-                          '0',
-
+                          '$totalProductos',
                           Icons.inventory_2_outlined,
                         ),
-
                         tarjetaEstadistica(
                           'Promociones Activas',
-
-                          '0',
-
+                          '$totalPromociones',
                           Icons.local_offer_outlined,
                         ),
-
                         tarjetaEstadistica(
                           'Categorías',
-
-                          '0',
-
+                          '$totalCategorias',
                           Icons.category_outlined,
                         ),
-
                         tarjetaEstadistica(
                           'Usuarios Registrados',
-
                           '$usuariosRegistrados',
-
                           Icons.people_outline,
                         ),
                       ],
@@ -256,19 +214,14 @@ class _InicioAdminState extends State<InicioAdmin> {
                     // ESTADO
                     Container(
                       padding: const EdgeInsets.all(18),
-
                       decoration: AppEstilos.tarjeta(),
-
                       child: Row(
                         children: [
                           Container(
                             width: 45,
-
                             height: 45,
-
                             decoration: const BoxDecoration(
                               color: Colors.green,
-
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -278,32 +231,24 @@ class _InicioAdminState extends State<InicioAdmin> {
                           const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-
                               children: [
                                 Text(
                                   'Estado de la Cafetería',
-
                                   style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
-
                                 Text(
                                   'Abierta - Operando normalmente',
-
                                   style: AppEstilos.subtitulo,
                                 ),
                               ],
                             ),
                           ),
-
                           ElevatedButton(
                             onPressed: () {},
-
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColores.beige,
-
                               foregroundColor: AppColores.cafeOscuro,
                             ),
-
                             child: const Text('Cambiar'),
                           ),
                         ],
@@ -314,10 +259,8 @@ class _InicioAdminState extends State<InicioAdmin> {
 
                     const Text(
                       'Acciones rápidas',
-
                       style: TextStyle(
                         fontSize: 20,
-
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -326,11 +269,8 @@ class _InicioAdminState extends State<InicioAdmin> {
 
                     GridView.count(
                       shrinkWrap: true,
-
                       physics: const NeverScrollableScrollPhysics(),
-
                       crossAxisCount: 2,
-
                       children: [
                         GestureDetector(
                           onTap: () {
@@ -341,14 +281,42 @@ class _InicioAdminState extends State<InicioAdmin> {
                               ),
                             );
                           },
-
                           child: accion(Icons.inventory_2, 'Productos'),
                         ),
-                        accion(Icons.local_offer, 'Promociones'),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PromocionesAdmin(),
+                              ),
+                            );
+                          },
+                          child: accion(Icons.local_offer, 'Promociones'),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CategoriasAdmin(),
+                              ),
+                            );
+                          },
 
-                        accion(Icons.category, 'Categorías'),
-
-                        accion(Icons.people, 'Usuarios'),
+                          child: accion(Icons.category, 'Categorías'),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const UsuariosAdmin(),
+                              ),
+                            );
+                          },
+                          child: accion(Icons.people, 'Usuarios'),
+                        ),
                       ],
                     ),
                   ],
@@ -359,19 +327,13 @@ class _InicioAdminState extends State<InicioAdmin> {
             // BARRA INFERIOR
             Container(
               height: 70,
-
               decoration: const BoxDecoration(color: AppColores.cafeOscuro),
-
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
-
                 children: [
                   menuInferior(Icons.home, 'Inicio', true),
-
                   menuInferior(Icons.inventory_2, 'Productos', false),
-
                   menuInferior(Icons.local_offer, 'Promos', false),
-
                   menuInferior(Icons.settings, 'Gestión', false),
                 ],
               ),
@@ -385,23 +347,16 @@ class _InicioAdminState extends State<InicioAdmin> {
   Widget tarjetaEstadistica(String titulo, String numero, IconData icono) {
     return Container(
       padding: const EdgeInsets.all(16),
-
       decoration: AppEstilos.tarjeta(),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-
         children: [
           Icon(icono, color: AppColores.cafeOscuro),
-
           const Spacer(),
-
           Text(
             numero,
-
             style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
-
           Text(titulo, style: AppEstilos.subtitulo),
         ],
       ),
@@ -411,17 +366,12 @@ class _InicioAdminState extends State<InicioAdmin> {
   Widget accion(IconData icono, String texto) {
     return Container(
       margin: const EdgeInsets.all(6),
-
       decoration: AppEstilos.tarjeta(),
-
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-
         children: [
           Icon(icono, size: 35, color: AppColores.cafeOscuro),
-
           const SizedBox(height: 10),
-
           Text(texto, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
@@ -431,10 +381,8 @@ class _InicioAdminState extends State<InicioAdmin> {
   Widget menuInferior(IconData icono, String texto, bool seleccionado) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
-
       children: [
         Icon(icono, color: Colors.white),
-
         Text(texto, style: const TextStyle(color: Colors.white, fontSize: 12)),
       ],
     );

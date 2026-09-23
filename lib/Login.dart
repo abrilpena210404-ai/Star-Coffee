@@ -40,18 +40,14 @@ class _LoginState extends State<Login> {
         correo,
         password,
       );
-
       if (!mounted) return;
-
       if (usuario == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Correo o contraseña incorrectos')),
         );
         return;
       }
-
       final rol = usuario['rol'];
-
       if (rol == 'admin') {
         Navigator.pushReplacement(
           context,
@@ -65,7 +61,6 @@ class _LoginState extends State<Login> {
       }
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ocurrió un error al iniciar sesión')),
       );
@@ -82,7 +77,6 @@ class _LoginState extends State<Login> {
           child: Column(
             children: [
               const SizedBox(height: 20),
-
               // IMAGEN PRINCIPAL
               Container(
                 width: 270,
@@ -100,7 +94,7 @@ class _LoginState extends State<Login> {
                 ),
                 child: ClipOval(
                   child: Image.asset(
-                    'assets/images/Logo_1.jpg',
+                    'assets/images/Logo_1.png',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return const Icon(
@@ -165,19 +159,6 @@ class _LoginState extends State<Login> {
               ),
 
               const SizedBox(height: 10),
-
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    '¿Olvidaste tu contraseña?',
-                    style: AppEstilos.textoEnlace,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 6),
 
               SizedBox(
                 width: double.infinity,
@@ -271,7 +252,6 @@ class _LoginState extends State<Login> {
                   color: AppColores.cafeMedio,
                 ),
               ),
-
               const SizedBox(height: 25),
             ],
           ),

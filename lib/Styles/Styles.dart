@@ -4,14 +4,11 @@ class AppColores {
   static const Color cafeOscuro = Color(0xFF5A2D14);
   static const Color cafeMedio = Color(0xFF7A4A2A);
   static const Color cafeClaro = Color(0xFFC9A27B);
-
   static const Color crema = Color(0xFFF8F1E8);
   static const Color cremaClaro = Color(0xFFFFFBF7);
   static const Color beige = Color(0xFFEADCCB);
-
   static const Color textoPrincipal = Color(0xFF2E160D);
   static const Color textoSecundario = Color(0xFF7A6A61);
-
   static const Color blanco = Colors.white;
 }
 
