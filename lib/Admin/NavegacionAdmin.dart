@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
-import 'InicioCliente.dart';
-import 'Catalogo.dart';
-import 'Favoritos.dart';
-import 'Ubicacion.dart';
+import 'InicioAdmin.dart';
+import 'Productos.dart';
+import 'Promociones.dart';
+import 'Gestion.dart';
 import '../Styles/Styles.dart';
 
-class NavegacionCliente extends StatefulWidget {
-  const NavegacionCliente({super.key});
+class Navegacionadmin extends StatefulWidget {
+  const Navegacionadmin({super.key});
   @override
-  State<NavegacionCliente> createState() => _NavegacionClienteState();
+  State<Navegacionadmin> createState() => _NavegacionadminState();
 }
 
-class _NavegacionClienteState extends State<NavegacionCliente> {
+class _NavegacionadminState extends State<Navegacionadmin> {
   int paginaActual = 0;
   final List<Widget> paginas = [
-    const InicioCliente(),
-    const CatalogoScreen(),
-    const FavoritosScreen(usuarioId: 1),
-    const UbicacionScreen(),
+    const InicioAdmin(),
+    const ProductosAdmin(),
+    const PromocionesAdmin(),
+    const Gestion(),
   ];
   void cambiarPagina(int index) {
     setState(() {
@@ -48,16 +48,16 @@ class _NavegacionClienteState extends State<NavegacionCliente> {
               children: [
                 boton(icono: Icons.home_rounded, texto: 'Inicio', index: 0),
                 boton(
-                  icono: Icons.menu_book_rounded,
-                  texto: 'Catálogo',
+                  icono: Icons.coffee_outlined,
+                  texto: 'Productos',
                   index: 1,
                 ),
                 boton(
-                  icono: Icons.favorite_rounded,
-                  texto: 'Favoritos',
+                  icono: Icons.local_offer_outlined,
+                  texto: 'Promociones',
                   index: 2,
                 ),
-                boton(icono: Icons.location_on_rounded, texto: 'Más', index: 3),
+                boton(icono: Icons.settings_outlined, texto: 'Gestión', index: 3),
               ],
             ),
           ),

@@ -74,20 +74,6 @@ class _FavoritosScreenState extends State<FavoritosScreen> {
                   ),
                 ),
               ),
-
-              const SizedBox(height: 7),
-
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Tus sabores favoritos, siempre a un clic.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColores.textoSecundario,
-                  ),
-                ),
-              ),
-
               const SizedBox(height: 20),
               Expanded(
                 child: favoritos.isEmpty

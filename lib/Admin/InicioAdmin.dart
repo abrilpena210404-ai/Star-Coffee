@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
 import '../basedatos/database_helper.dart';
 import 'package:star_coffee/Admin/Productos.dart';
-import 'package:star_coffee/Admin/Usuarios.dart';
-import 'package:star_coffee/Admin/Categorias.dart';
-import 'package:star_coffee/Admin/Promociones.dart';
 import '../Login.dart';
 
 class InicioAdmin extends StatefulWidget {
@@ -93,59 +90,6 @@ class _InicioAdminState extends State<InicioAdmin> {
     bannerTimer?.cancel();
     bannerController.dispose();
     super.dispose();
-  }
-
-  void cambiarEstadoCafeteria() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColores.cremaClaro,
-          title: const Text(
-            'Estado de la cafetería',
-            style: TextStyle(
-              color: AppColores.cafeOscuro,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.check_circle, color: Colors.green),
-                title: const Text('Abierta'),
-                subtitle: const Text('Operando normalmente'),
-                onTap: () {
-                  setState(() {
-                    estadoCafeteria = 'Abierta';
-                  });
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.cancel, color: Colors.red),
-                title: const Text('Cerrada'),
-                subtitle: const Text('La cafetería no está disponible'),
-                onTap: () {
-                  setState(() {
-                    estadoCafeteria = 'Cerrada';
-                  });
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Cancelar'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   @override
@@ -354,57 +298,6 @@ class _InicioAdminState extends State<InicioAdmin> {
                     ),
 
                     const SizedBox(height: 25),
-
-                    // ESTADO
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: AppEstilos.tarjeta(),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 45,
-                            height: 45,
-                            decoration: BoxDecoration(
-                              color: estadoCafeteria == 'Abierta'
-                                  ? Colors.green
-                                  : Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-
-                          const SizedBox(width: 15),
-
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Estado de la Cafetería',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-
-                                Text(
-                                  estadoCafeteria == 'Abierta'
-                                      ? 'Abierta - Operando normalmente'
-                                      : 'Cerrada - No disponible',
-                                  style: AppEstilos.subtitulo,
-                                ),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: cambiarEstadoCafeteria,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColores.beige,
-                              foregroundColor: AppColores.cafeOscuro,
-                            ),
-                            child: const Text('Cambiar'),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 25),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -429,90 +322,145 @@ class _InicioAdminState extends State<InicioAdmin> {
                       ],
                     ),
                     const SizedBox(height: 15),
-
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: productos.take(4).length,
+
+                      // SOLO MOSTRAMOS LOS PRIMEROS 6
+                      itemCount: productos.take(6).length,
+
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                             crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
+                            mainAxisSpacing: 14,
+                            childAspectRatio: 0.78,
                           ),
 
                       itemBuilder: (context, index) {
                         final producto = productos[index];
 
-                        return Container(
-                          decoration: AppEstilos.tarjeta(),
-                          padding: const EdgeInsets.all(10),
+                        final String imagen =
+                            producto['imagen']?.toString() ?? '';
 
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: Image.asset(
-                                    producto['imagen'],
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: AppColores.blanco,
+                            borderRadius: BorderRadius.circular(18),
+
+                            border: Border.all(
+                              color: AppColores.beige.withOpacity(0.75),
+                              width: 0.8,
+                            ),
+
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColores.cafeOscuro.withOpacity(0.07),
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // ================================
+                                // IMAGEN DEL PRODUCTO
+                                // ================================
+                                Expanded(
+                                  flex: 6,
+                                  child: SizedBox(
                                     width: double.infinity,
-                                    fit: BoxFit.cover,
+
+                                    child: imagen.isNotEmpty
+                                        ? Image.asset(
+                                            imagen,
+                                            fit: BoxFit.cover,
+
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                                  return Container(
+                                                    color: AppColores.beige,
+                                                    child: const Icon(
+                                                      Icons.local_cafe_rounded,
+                                                      size: 48,
+                                                      color:
+                                                          AppColores.cafeOscuro,
+                                                    ),
+                                                  );
+                                                },
+                                          )
+                                        : Container(
+                                            color: AppColores.beige,
+                                            child: const Icon(
+                                              Icons.local_cafe_rounded,
+                                              size: 48,
+                                              color: AppColores.cafeOscuro,
+                                            ),
+                                          ),
                                   ),
                                 ),
-                              ),
 
-                              const SizedBox(height: 8),
+                                // ================================
+                                // INFORMACIÓN
+                                // ================================
+                                Expanded(
+                                  flex: 4,
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      11,
+                                      9,
+                                      11,
+                                      10,
+                                    ),
 
-                              Text(
-                                producto['nombre'],
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // NOMBRE
+                                        Text(
+                                          producto['nombre']?.toString() ??
+                                              'Producto',
+
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColores.textoPrincipal,
+                                          ),
+                                        ),
+
+                                        const Spacer(),
+
+                                        // PRECIO
+                                        Text(
+                                          '\$${producto['precio']} MXN',
+
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColores.cafeOscuro,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-
-                              Text('\$${producto['precio']}'),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       },
                     ),
                   ],
                 ),
-              ),
-            ),
-
-            // BARRA INFERIOR
-            Container(
-              height: 70,
-              decoration: const BoxDecoration(color: AppColores.cafeOscuro),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  menuInferior(Icons.home, 'Inicio', true, () {}),
-                  menuInferior(Icons.inventory_2, 'Productos', false, () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ProductosAdmin()),
-                    );
-                  }),
-                  menuInferior(Icons.local_offer, 'Promos', false, () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const PromocionesAdmin(),
-                      ),
-                    );
-                  }),
-                  menuInferior(Icons.settings, 'Gestión', false, () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const CategoriasAdmin(),
-                      ),
-                    );
-                  }),
-                ],
               ),
             ),
           ],
@@ -550,27 +498,6 @@ class _InicioAdminState extends State<InicioAdmin> {
           Icon(icono, size: 35, color: AppColores.cafeOscuro),
           const SizedBox(height: 10),
           Text(texto, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  Widget menuInferior(
-    IconData icono,
-    String texto,
-    bool seleccionado,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icono, color: Colors.white),
-          Text(
-            texto,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
         ],
       ),
     );

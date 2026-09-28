@@ -1,5 +1,6 @@
 import 'package:star_coffee/Admin/InicioAdmin.dart';
 import 'package:flutter/material.dart';
+import 'package:star_coffee/Admin/NavegacionAdmin.dart';
 import 'package:star_coffee/Cliente/NavegacionCliente.dart';
 import 'package:star_coffee/Styles/Styles.dart';
 import 'registro.dart';
@@ -51,14 +52,14 @@ class _LoginState extends State<Login> {
       if (rol == 'admin') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const InicioAdmin()),
+          MaterialPageRoute(builder: (_) => const Navegacionadmin()),
         );
       } else {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const NavegacionCliente()),
         );
-      }
+      } 
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
