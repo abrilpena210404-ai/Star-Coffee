@@ -11,11 +11,15 @@ class CatalogoScreen extends StatefulWidget {
 
 class _CatalogoScreenState extends State<CatalogoScreen> {
   String categoriaSeleccionada = 'Todos';
+  String textoBusqueda = '';
   List<Map<String, dynamic>> productos = [];
+  List<Map<String, dynamic>> categorias = [];
+
   @override
   void initState() {
     super.initState();
     cargarProductos();
+    cargarCategorias();
   }
 
   Future<void> cargarProductos() async {
@@ -26,190 +30,266 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
     });
   }
 
+  Future<void> cargarCategorias() async {
+    final datos = await DatabaseHelper.instancia.obtenerCategorias();
+    if (!mounted) return;
+    setState(() {
+      categorias = datos;
+    });
+  }
+
   List<Map<String, dynamic>> get productosFiltrados {
-    if (categoriaSeleccionada == 'Todos') {
-      return productos;
-    }
-    return productos
-        .where((producto) => producto['categoria'] == categoriaSeleccionada)
-        .toList();
+    return productos.where((producto) {
+      final coincideCategoria =
+          categoriaSeleccionada == 'Todos' ||
+          producto['categoria'].toString() == categoriaSeleccionada;
+      final texto = textoBusqueda.toLowerCase();
+      final coincideBusqueda =
+          producto['nombre'].toString().toLowerCase().contains(texto) ||
+          producto['descripcion'].toString().toLowerCase().contains(texto);
+      return coincideCategoria && coincideBusqueda;
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColores.cremaClaro,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ENCABEZADO
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: AppColores.cafeOscuro,
-                    ),
-                  ),
+
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+
+        // ==========================================
+        // FONDO DEGRADADO MUY SUAVE
+        // ==========================================
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColores.blanco,
+              AppColores.cremaClaro,
+              AppColores.crema,
+            ],
+            stops: [0.0, 0.50, 1.0],
+          ),
+        ),
+
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ==========================================
+              // ENCABEZADO
+              // ==========================================
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                child: Row(
+                  children: [
                   const Expanded(
-                    child: Text(
-                      'Catálogo',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 27,
-                        fontWeight: FontWeight.bold,
-                        color: AppColores.textoPrincipal,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Nuestro Catálogo',
+                            style: TextStyle(
+                              fontSize: 26,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              color: AppColores.textoPrincipal,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+
+                          SizedBox(height: 6),
+
+                          Text(
+                            'Gran variedad de alimentos y bebidas',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColores.textoSecundario,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 17),
+
+              // ==========================================
+              // BUSCADOR
+              // ==========================================
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColores.cafeOscuro.withOpacity(0.06),
+                        blurRadius: 12,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    onChanged: (valor) {
+                      setState(() {
+                        textoBusqueda = valor;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Buscar café, bebidas o postres',
+                      hintStyle: const TextStyle(
+                        color: AppColores.textoSecundario,
+                        fontSize: 13,
+                      ),
+
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: AppColores.cafeOscuro,
+                        size: 22,
+                      ),
+
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.92),
+
+                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
+
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide.none,
+                      ),
+
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide(
+                          color: AppColores.beige.withOpacity(0.9),
+                        ),
+                      ),
+
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: const BorderSide(
+                          color: AppColores.cafeMedio,
+                          width: 1.4,
+                        ),
                       ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(
-                      Icons.shopping_bag_outlined,
-                      color: AppColores.cafeOscuro,
-                      size: 28,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // BUSCADOR
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Buscar bebidas o alimentos',
-                  hintStyle: const TextStyle(color: AppColores.textoSecundario),
-                  prefixIcon: const Icon(
-                    Icons.search,
-                    color: AppColores.cafeOscuro,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(17),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(17),
-                    borderSide: const BorderSide(color: AppColores.beige),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(17),
-                    borderSide: const BorderSide(
-                      color: AppColores.cafeMedio,
-                      width: 1.5,
-                    ),
-                  ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 8),
+              const SizedBox(height: 16),
 
-            // CATEGORÍAS
-            SizedBox(
-              height: 48,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                children: [
-                  botonCategoria('Todos'),
-                  botonCategoria('Cafés'),
-                  botonCategoria('Fríos'),
-                  botonCategoria('Postres'),
-                  botonCategoria('Snacks'),
-                ],
-              ),
-            ),
+              // ==========================================
+              // CATEGORÍAS DINÁMICAS
+              // ==========================================
+              SizedBox(
+                height: 43,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                  children: [
+                    botonCategoria('Todos'),
 
-            const SizedBox(height: 15),
-
-            // PRODUCTOS
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 5, 20, 25),
-                itemCount: productosFiltrados.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 0.68,
+                    ...categorias.map(
+                      (categoria) =>
+                          botonCategoria(categoria['nombre'].toString()),
+                    ),
+                  ],
                 ),
-                itemBuilder: (context, index) {
-                  final producto = productosFiltrados[index];
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DetalleProducto(producto: producto),
+              ),
+
+              const SizedBox(height: 15),
+
+              Expanded(
+                child: productosFiltrados.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 35),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 75,
+                                height: 75,
+                                decoration: const BoxDecoration(
+                                  color: AppColores.beige,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.local_cafe_outlined,
+                                  size: 37,
+                                  color: AppColores.cafeOscuro,
+                                ),
+                              ),
+
+                              const SizedBox(height: 15),
+
+                              const Text(
+                                'No encontramos productos',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColores.textoPrincipal,
+                                ),
+                              ),
+
+                              const SizedBox(height: 5),
+
+                              const Text(
+                                'Prueba con otra búsqueda o categoría.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColores.textoSecundario,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      );
-                    },
-                    child: tarjetaProducto(
-                      nombre: producto['nombre'],
-                      descripcion: producto['descripcion'],
-                      precio: (producto['precio'] as num).toDouble(),
-                      imagen: producto['imagen'] ?? '',
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+                      )
+                    : GridView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 3, 20, 30),
+                        itemCount: productosFiltrados.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 11,
+                              mainAxisSpacing: 13,
 
-      // BARRA INFERIOR
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x18000000),
-              blurRadius: 12,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                itemNavegacion(
-                  icono: Icons.home_rounded,
-                  titulo: 'Inicio',
-                  onTap: () {
-                    Navigator.pop(context);
-                  },
-                ),
-                itemNavegacion(
-                  icono: Icons.menu_book_rounded,
-                  titulo: 'Catálogo',
-                  seleccionado: true,
-                  onTap: () {},
-                ),
-                itemNavegacion(
-                  icono: Icons.favorite_border_rounded,
-                  titulo: 'Favoritos',
-                  onTap: () {},
-                ),
-                itemNavegacion(
-                  icono: Icons.grid_view_rounded,
-                  titulo: 'Más',
-                  onTap: () {},
-                ),
-              ],
-            ),
+                              childAspectRatio: 0.72,
+                            ),
+                        itemBuilder: (context, index) {
+                          final producto = productosFiltrados[index];
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      DetalleProducto(producto: producto),
+                                ),
+                              );
+                            },
+                            child: tarjetaProducto(
+                              nombre: producto['nombre'] ?? 'Producto',
+                              descripcion: producto['descripcion'] ?? '',
+                              precio: (producto['precio'] as num).toDouble(),
+                              imagen: producto['imagen'] ?? '',
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
         ),
       ),
@@ -225,23 +305,34 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
         });
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.symmetric(horizontal: 5),
-        padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 10),
+        duration: const Duration(milliseconds: 220),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
         decoration: BoxDecoration(
-          color: seleccionado ? AppColores.cafeOscuro : Colors.white,
+          color: seleccionado
+              ? AppColores.cafeOscuro
+              : Colors.white.withOpacity(0.82),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: seleccionado ? AppColores.cafeOscuro : AppColores.beige,
           ),
+          boxShadow: seleccionado
+              ? [
+                  BoxShadow(
+                    color: AppColores.cafeOscuro.withOpacity(0.12),
+                    blurRadius: 7,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : [],
         ),
         child: Center(
           child: Text(
             categoria,
             style: TextStyle(
-              color: seleccionado ? Colors.white : AppColores.cafeOscuro,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+              color: seleccionado ? Colors.white : AppColores.textoPrincipal,
+              fontWeight: seleccionado ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 12,
             ),
           ),
         ),
@@ -257,40 +348,50 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.96),
+
+        borderRadius: BorderRadius.circular(18),
+
+        border: Border.all(
+          color: AppColores.beige.withOpacity(0.75),
+          width: 0.8,
+        ),
+
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: AppColores.cafeOscuro.withOpacity(0.07),
+            blurRadius: 11,
             offset: const Offset(0, 5),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 6,
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                  child: imagen.isNotEmpty
+
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ==========================================
+            // IMAGEN
+            // ==========================================
+            Expanded(
+              flex: 6,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  imagen.isNotEmpty
                       ? Image.asset(
                           imagen,
-                          width: double.infinity,
-                          height: double.infinity,
                           fit: BoxFit.cover,
+
                           errorBuilder: (context, error, stackTrace) {
                             return Container(
                               color: AppColores.beige,
-                              width: double.infinity,
+
                               child: const Icon(
                                 Icons.local_cafe_rounded,
-                                size: 55,
+                                size: 48,
                                 color: AppColores.cafeOscuro,
                               ),
                             );
@@ -298,101 +399,115 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                         )
                       : Container(
                           color: AppColores.beige,
-                          width: double.infinity,
-                          height: double.infinity,
+
                           child: const Icon(
                             Icons.local_cafe_rounded,
-                            size: 55,
+                            size: 48,
                             color: AppColores.cafeOscuro,
                           ),
                         ),
-                ),
-                Positioned(
-                  top: 9,
-                  right: 9,
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      shape: BoxShape.circle,
+
+                  // DEGRADADO MUY SUAVE EN LA FOTO
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 45,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            AppColores.cafeOscuro.withOpacity(0.10),
+                          ],
+                        ),
+                      ),
                     ),
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () {},
-                      icon: const Icon(
-                        Icons.favorite_border,
+                  ),
+
+                  // CORAZÓN
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.92),
+                        shape: BoxShape.circle,
+
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+
+                      child: const Icon(
+                        Icons.favorite_border_rounded,
                         color: AppColores.cafeOscuro,
-                        size: 20,
+                        size: 19,
                       ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 5,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    nombre,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColores.textoPrincipal,
-                    ),
-                  ), 
-                  const SizedBox(height: 4),
-                  Text(
-                    descripcion,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      height: 1.3,
-                      color: AppColores.textoSecundario,
-                    ),
-                  ),
-
-                  const Spacer(),
-                  Row(
-                    children: [
-                      Text(
-                        '\$${precio.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: AppColores.cafeOscuro,
-                        ),
-                      ),
-
-                      const Spacer(),
-                      Container(
-                        width: 31,
-                        height: 31,
-                        decoration: const BoxDecoration(
-                          color: AppColores.cafeOscuro,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.add,
-                          color: Colors.white,
-                          size: 19,
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+
+            // ==========================================
+            // INFORMACIÓN
+            // ==========================================
+            Expanded(
+              flex: 4,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
+
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      nombre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColores.textoPrincipal,
+                      ),
+                    ),
+
+                    const SizedBox(height: 3),
+
+                    Expanded(
+                      child: Text(
+                        descripcion,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          height: 1.2,
+                          color: AppColores.textoSecundario,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '\$${precio.toStringAsFixed(0)} MXN',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColores.cafeOscuro,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

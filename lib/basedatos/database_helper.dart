@@ -158,6 +158,11 @@ class DatabaseHelper {
     return await db.query('usuarios', orderBy: 'nombre ASC');
   }
 
+  Future<int> eliminarUsuario(int id) async {
+    final db = await database;
+    return await db.delete('usuarios', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<int> agregarProducto({
     required String nombre,
     required String descripcion,
@@ -239,6 +244,19 @@ class DatabaseHelper {
     return await db.delete('categorias', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<int> actualizarCategoria({
+    required int id,
+    required String nombre,
+  }) async {
+    final db = await database;
+    return await db.update(
+      'categorias',
+      {'nombre': nombre},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   Future<List<Map<String, dynamic>>> obtenerPromociones() async {
     final db = await database;
     return await db.query('promociones', orderBy: 'id DESC');
@@ -261,6 +279,21 @@ class DatabaseHelper {
   Future<int> eliminarPromocion(int id) async {
     final db = await database;
     return await db.delete('promociones', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> actualizarPromocion({
+    required int id,
+    required String titulo,
+    required String descripcion,
+    required double descuento,
+  }) async {
+    final db = await database;
+    return await db.update(
+      'promociones',
+      {'titulo': titulo, 'descripcion': descripcion, 'descuento': descuento},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<int> contarCategorias() async {

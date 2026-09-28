@@ -81,6 +81,63 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
     );
   }
 
+  Future<void> editarPromocion(Map<String, dynamic> promo) async {
+    final titulo = TextEditingController(text: promo['titulo']);
+    final descripcion = TextEditingController(text: promo['descripcion']);
+    final descuento = TextEditingController(
+      text: promo['descuento'].toString(),
+    );
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColores.cremaClaro,
+          title: const Text(
+            'Editar promoción',
+            style: TextStyle(
+              color: AppColores.cafeOscuro,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              children: [
+                campo(titulo, 'Título'),
+                campo(descripcion, 'Descripción'),
+                campo(descuento, 'Descuento %'),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColores.cafeOscuro,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                await DatabaseHelper.instancia.actualizarPromocion(
+                  id: promo['id'],
+                  titulo: titulo.text,
+                  descripcion: descripcion.text,
+                  descuento: double.parse(descuento.text),
+                );
+                Navigator.pop(context);
+                cargarPromociones();
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget campo(TextEditingController controller, String texto) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -179,14 +236,27 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                           ],
                         ),
                       ),
-                      IconButton(
-                        onPressed: () {
-                          eliminar(promo['id']);
-                        },
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () {
+                              editarPromocion(promo);
+                            },
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              color: AppColores.cafeOscuro,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              eliminar(promo['id']);
+                            },
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

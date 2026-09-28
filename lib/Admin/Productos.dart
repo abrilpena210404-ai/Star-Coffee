@@ -11,11 +11,15 @@ class ProductosAdmin extends StatefulWidget {
 
 class _ProductosAdminState extends State<ProductosAdmin> {
   List<Map<String, dynamic>> productos = [];
+  List<Map<String, dynamic>> categorias = [];
+  List<Map<String, dynamic>> productosFiltrados = [];
 
-  @override
+  final TextEditingController buscarController = TextEditingController();
+
   void initState() {
     super.initState();
     cargarProductos();
+    cargarCategorias();
   }
 
   Future<void> cargarProductos() async {
@@ -23,6 +27,25 @@ class _ProductosAdminState extends State<ProductosAdmin> {
     if (!mounted) return;
     setState(() {
       productos = datos;
+      productosFiltrados = datos;
+    });
+  }
+
+  void buscarProducto(String texto) {
+    final resultado = productos.where((producto) {
+      final nombre = producto['nombre'].toString().toLowerCase();
+      return nombre.contains(texto.toLowerCase());
+    }).toList();
+    setState(() {
+      productosFiltrados = resultado;
+    });
+  }
+
+  Future<void> cargarCategorias() async {
+    final datos = await DatabaseHelper.instancia.obtenerCategorias();
+    if (!mounted) return;
+    setState(() {
+      categorias = datos;
     });
   }
 
@@ -31,8 +54,17 @@ class _ProductosAdminState extends State<ProductosAdmin> {
     final descripcion = TextEditingController();
     final precio = TextEditingController();
     final stock = TextEditingController();
+    final imagenes = [
+      {'nombre': 'Latte', 'ruta': 'assets/images/Latte.jpg'},
+      {'nombre': 'Cappuccino2', 'ruta': 'assets/images/Cappuccino2.jpg'},
+      {'nombre': 'Frappe1', 'ruta': 'assets/images/Frappe1.jpg'},
+      {'nombre': 'pan', 'ruta': 'assets/images/pan.jpg'},
+      {'nombre': 'cuernito', 'ruta': 'assets/images/cuernito.jpg'},
+      {'nombre': 'pastel1', 'ruta': 'assets/images/pastel1.jpg'},
+    ];
 
-    String categoria = 'Cafés';
+    String? categoria;
+    String imagenSeleccionada = '';
 
     await showDialog(
       context: context,
@@ -60,21 +92,56 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                     DropdownButtonFormField<String>(
                       value: categoria,
                       decoration: const InputDecoration(labelText: 'Categoría'),
-                      items: const [
-                        DropdownMenuItem(value: 'Cafés', child: Text('Cafés')),
-                        DropdownMenuItem(value: 'Fríos', child: Text('Fríos')),
-                        DropdownMenuItem(
-                          value: 'Postres',
-                          child: Text('Postres'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Snacks',
-                          child: Text('Snacks'),
-                        ),
-                      ],
+                      items: categorias.map((categoriaBD) {
+                        return DropdownMenuItem<String>(
+                          value: categoriaBD['nombre'],
+                          child: Text(categoriaBD['nombre']),
+                        );
+                      }).toList(),
                       onChanged: (valor) {
                         cambiarEstado(() {
                           categoria = valor!;
+                        });
+                      },
+                      hint: const Text('Selecciona categoría'), //PENDIENTE
+                    ),
+                    const SizedBox(height: 15),
+
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Seleccionar imagen',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    DropdownButtonFormField<String>(
+                      value: imagenSeleccionada.isEmpty
+                          ? null
+                          : imagenSeleccionada,
+                      decoration: InputDecoration(
+                        labelText: 'Imagen del producto',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+
+                      hint: const Text('Selecciona una imagen'),
+
+                      items: imagenes.map((imagen) {
+                        return DropdownMenuItem<String>(
+                          value: imagen['ruta']!,
+                          child: Text(imagen['nombre']!),
+                        );
+                      }).toList(),
+
+                      onChanged: (valor) {
+                        cambiarEstado(() {
+                          imagenSeleccionada = valor ?? '';
                         });
                       },
                     ),
@@ -98,8 +165,79 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       nombre: nombre.text,
                       descripcion: descripcion.text,
                       precio: double.parse(precio.text),
-                      imagen: '',
-                      categoria: categoria,
+                      imagen: imagenSeleccionada,
+                      categoria: categoria ?? '',
+                      stock: int.parse(stock.text),
+                    );
+                    Navigator.pop(context);
+                    cargarProductos();
+                  },
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> editarProducto(Map<String, dynamic> producto) async {
+    final nombre = TextEditingController(text: producto['nombre']);
+    final descripcion = TextEditingController(text: producto['descripcion']);
+    final precio = TextEditingController(text: producto['precio'].toString());
+    final stock = TextEditingController(text: producto['stock'].toString());
+    String? categoria = producto['categoria'];
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, cambiarEstado) {
+            return AlertDialog(
+              backgroundColor: AppColores.cremaClaro,
+              title: const Text('Editar producto'),
+              content: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    campo(nombre, 'Nombre'),
+                    campo(descripcion, 'Descripción'),
+                    campo(precio, 'Precio'),
+                    campo(stock, 'Stock'),
+                    DropdownButtonFormField<String>(
+                      value: categoria,
+                      decoration: const InputDecoration(labelText: 'Categoría'),
+                      items: categorias.map<DropdownMenuItem<String>>((cat) {
+                        return DropdownMenuItem<String>(
+                          value: cat['nombre'].toString(),
+                          child: Text(cat['nombre'].toString()),
+                        );
+                      }).toList(),
+                      onChanged: (valor) {
+                        cambiarEstado(() {
+                          categoria = valor!;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await DatabaseHelper.instancia.actualizarProducto(
+                      id: producto['id'],
+                      nombre: nombre.text,
+                      descripcion: descripcion.text,
+                      precio: double.parse(precio.text),
+                      imagen: producto['imagen'],
+                      categoria: categoria ?? '',
                       stock: int.parse(stock.text),
                     );
                     Navigator.pop(context);
@@ -149,87 +287,142 @@ class _ProductosAdminState extends State<ProductosAdmin> {
             fontWeight: FontWeight.bold,
           ),
         ),
-      ),
-
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColores.cafeOscuro,
-        foregroundColor: Colors.white,
-        onPressed: agregarProducto,
-        child: const Icon(Icons.add),
-      ),
-      body: productos.isEmpty
-          ? const Center(
-              child: Text(
-                'No hay productos registrados',
-                style: TextStyle(color: AppColores.cafeOscuro),
+        actions: [
+          TextButton(
+            onPressed: agregarProducto,
+            child: const Text(
+              '+ Crear',
+              style: TextStyle(
+                color: AppColores.cafeOscuro,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: productos.length,
-              itemBuilder: (context, index) {
-                final producto = productos[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 15),
-                  padding: const EdgeInsets.all(15),
-                  decoration: AppEstilos.tarjeta(),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: AppColores.beige,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: const Icon(
-                          Icons.local_cafe,
-                          color: AppColores.cafeOscuro,
-                        ),
-                      ),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: TextField(
+              controller: buscarController,
+              onChanged: buscarProducto,
+              decoration: InputDecoration(
+                hintText: 'Buscar productos...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
 
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(
+            child: productosFiltrados.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No hay productos registrados',
+                      style: TextStyle(color: AppColores.cafeOscuro),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(20),
+
+                    itemCount: productosFiltrados.length,
+
+                    itemBuilder: (context, index) {
+                      final producto = productosFiltrados[index];
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 15),
+                        padding: const EdgeInsets.all(15),
+                        decoration: AppEstilos.tarjeta(),
+
+                        child: Row(
                           children: [
-                            Text(
-                              producto['nombre'],
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 17,
+                            Container(
+                              width: 60,
+                              height: 60,
+
+                              decoration: BoxDecoration(
+                                color: AppColores.beige,
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(15),
+                                child: Image.asset(
+                                  producto['imagen'],
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
 
-                            Text(
-                              producto['categoria'],
-                              style: AppEstilos.subtitulo,
+                            const SizedBox(width: 15),
+
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+
+                                children: [
+                                  Text(
+                                    producto['nombre'],
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 17,
+                                    ),
+                                  ),
+
+                                  Text(
+                                    producto['categoria'],
+                                    style: AppEstilos.subtitulo,
+                                  ),
+
+                                  Text(
+                                    '\$${producto['precio']}',
+                                    style: const TextStyle(
+                                      color: AppColores.cafeOscuro,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
 
-                            Text(
-                              '\$${producto['precio']}',
-                              style: const TextStyle(
+                            IconButton(
+                              onPressed: () {
+                                editarProducto(producto);
+                              },
+
+                              icon: const Icon(
+                                Icons.edit_outlined,
                                 color: AppColores.cafeOscuro,
-                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            IconButton(
+                              onPressed: () {
+                                eliminar(producto['id']);
+                              },
+
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      IconButton(
-                        onPressed: () {
-                          eliminar(producto['id']);
-                        },
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
-            ),
+          ),
+        ],
+      ),
     );
   }
 }
