@@ -4,6 +4,7 @@ import 'Productos.dart';
 import 'Promociones.dart';
 import 'Gestion.dart';
 import '../Styles/Styles.dart';
+import 'pedidos.dart';
 
 class Navegacionadmin extends StatefulWidget {
   const Navegacionadmin({super.key});
@@ -18,6 +19,7 @@ class _NavegacionadminState extends State<Navegacionadmin> {
     const ProductosAdmin(),
     const PromocionesAdmin(),
     const Gestion(),
+    const PedidosAdmin(),
   ];
   void cambiarPagina(int index) {
     setState(() {
@@ -57,7 +59,16 @@ class _NavegacionadminState extends State<Navegacionadmin> {
                   texto: 'Promociones',
                   index: 2,
                 ),
-                boton(icono: Icons.settings_outlined, texto: 'Gestión', index: 3),
+                boton(
+                  icono: Icons.receipt_long_outlined,
+                  texto: 'Pedidos',
+                  index: 4,
+                ),
+                boton(
+                  icono: Icons.settings_outlined,
+                  texto: 'Gestión',
+                  index: 3,
+                ),
               ],
             ),
           ),

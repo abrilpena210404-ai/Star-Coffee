@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:star_coffee/Cliente/DetalleProducto.dart';
 import '../Styles/Styles.dart';
 import 'package:star_coffee/basedatos/database_helper.dart';
+import 'package:star_coffee/Cliente/carrito.dart';
 
 class CatalogoScreen extends StatefulWidget {
   const CatalogoScreen({super.key});
@@ -59,10 +60,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-
-        // ==========================================
-        // FONDO DEGRADADO MUY SUAVE
-        // ==========================================
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -80,14 +77,11 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ==========================================
-              // ENCABEZADO
-              // ==========================================
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
                 child: Row(
                   children: [
-                  const Expanded(
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -101,17 +95,30 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                               letterSpacing: -0.5,
                             ),
                           ),
-
-                          SizedBox(height: 6),
-
-                          Text(
-                            'Gran variedad de alimentos y bebidas',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColores.textoSecundario,
-                            ),
-                          ),
                         ],
+                      ),
+                    ),
+
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColores.beige),
+                      ),
+                      child: IconButton(
+                        tooltip: 'Carrito',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CarritoScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.shopping_cart_outlined,
+                          color: AppColores.cafeOscuro,
+                        ),
                       ),
                     ),
                   ],
@@ -119,10 +126,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
               ),
 
               const SizedBox(height: 17),
-
-              // ==========================================
-              // BUSCADOR
-              // ==========================================
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
@@ -423,33 +426,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                             AppColores.cafeOscuro.withOpacity(0.10),
                           ],
                         ),
-                      ),
-                    ),
-                  ),
-
-                  // CORAZÓN
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.92),
-                        shape: BoxShape.circle,
-
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-
-                      child: const Icon(
-                        Icons.favorite_border_rounded,
-                        color: AppColores.cafeOscuro,
-                        size: 19,
                       ),
                     ),
                   ),

@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
-import '../Styles/styles.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'Styles/styles.dart';
 import 'Login.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Inicializar Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const StarCoffeeApp());
 }
 

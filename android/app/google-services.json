@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "268477282987",
+    "project_id": "star-coffee-c79e3",
+    "storage_bucket": "star-coffee-c79e3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:268477282987:android:be085209765830b1ad15ee",
+        "android_client_info": {
+          "package_name": "com.example.star_coffee"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDo_iQrSnosHkL5RuJWVua6_0v7mBytSTw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

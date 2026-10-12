@@ -20,6 +20,7 @@ class _UbicacionScreenState extends State<UbicacionScreen> {
         title: const Text(
           'Ubicación',
           style: TextStyle(
+            fontSize: 25,
             color: AppColores.textoPrincipal,
             fontWeight: FontWeight.bold,
           ),

@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:star_coffee/Admin/NavegacionAdmin.dart';
 import 'package:star_coffee/Cliente/NavegacionCliente.dart';
 import 'package:star_coffee/Styles/Styles.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'registro.dart';
-import 'package:star_coffee/basedatos/database_helper.dart';
+import 'sesion.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -27,7 +29,7 @@ class _LoginState extends State<Login> {
 
   Future<void> iniciarSesion() async {
     final correo = correoController.text.trim();
-    final password = passwordController.text.trim();
+    final password = passwordController.text;
 
     if (correo.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -37,18 +39,52 @@ class _LoginState extends State<Login> {
     }
 
     try {
-      final usuario = await DatabaseHelper.instancia.iniciarSesion(
-        correo,
-        password,
+      // Autenticar usuario en Firebase
+      final credencial = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: correo,
+        password: password,
       );
-      if (!mounted) return;
-      if (usuario == null) {
+
+      final uid = credencial.user!.uid;
+
+      // Obtener los datos del usuario desde Firestore
+      final documento = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(uid)
+          .get();
+
+      if (!documento.exists || documento.data() == null) {
+        await FirebaseAuth.instance.signOut();
+
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Correo o contraseña incorrectos')),
+          const SnackBar(content: Text('No se encontró el perfil del usuario')),
         );
         return;
       }
-      final rol = usuario['rol'];
+
+      final usuario = documento.data()!;
+
+      final rol = usuario['rol']?.toString() ?? '';
+
+      if (rol != 'admin' && rol != 'cliente') {
+        await FirebaseAuth.instance.signOut();
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rol de usuario no válido')),
+        );
+        return;
+      }
+
+      // Guardar los datos de la sesión
+      Sesion.iniciar({...usuario, 'uid': uid});
+
+      if (!mounted) return;
+
+      // Mantener la navegación original
       if (rol == 'admin') {
         Navigator.pushReplacement(
           context,
@@ -59,9 +95,28 @@ class _LoginState extends State<Login> {
           context,
           MaterialPageRoute(builder: (_) => const NavegacionCliente()),
         );
-      } 
+      }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      String mensaje = 'No se pudo iniciar sesión';
+
+      if (e.code == 'invalid-email') {
+        mensaje = 'Ingresa un correo válido';
+      } else if (e.code == 'invalid-credential' ||
+          e.code == 'wrong-password' ||
+          e.code == 'user-not-found') {
+        mensaje = 'Correo o contraseña incorrectos';
+      } else if (e.code == 'too-many-requests') {
+        mensaje = 'Demasiados intentos. Intenta más tarde';
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(mensaje)));
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ocurrió un error al iniciar sesión')),
       );

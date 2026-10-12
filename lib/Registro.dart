@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../Styles/styles.dart';
-import 'package:star_coffee/basedatos/database_helper.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Login.dart';
 
 class Registro extends StatefulWidget {
@@ -15,8 +16,7 @@ class _RegistroState extends State<Registro> {
   final TextEditingController correoController = TextEditingController();
   final TextEditingController telefonoController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmarPasswordController =
-      TextEditingController();
+  final TextEditingController confirmarPasswordController =TextEditingController();
 
   bool ocultarPassword = true;
   bool ocultarConfirmarPassword = true;
@@ -31,66 +31,96 @@ class _RegistroState extends State<Registro> {
     confirmarPasswordController.dispose();
     super.dispose();
   }
+  
+Future<void> registrarUsuario() async {
+  final nombre = nombreController.text.trim();
+  final correo = correoController.text.trim();
+  final telefono = telefonoController.text.trim();
+  final password = passwordController.text;
+  final confirmar = confirmarPasswordController.text;
 
-  Future<void> registrarUsuario() async {
-    final nombre = nombreController.text.trim();
-    final correo = correoController.text.trim();
-    final telefono = telefonoController.text.trim();
-    final password = passwordController.text.trim();
-    final confirmar = confirmarPasswordController.text.trim();
+  if (nombre.isEmpty ||
+      correo.isEmpty ||
+      telefono.isEmpty ||
+      password.isEmpty ||
+      confirmar.isEmpty) {
+    mostrarMensaje('Completa todos los campos');
+    return;
+  }
 
-    if (nombre.isEmpty ||
-        correo.isEmpty ||
-        telefono.isEmpty ||
-        password.isEmpty ||
-        confirmar.isEmpty) {
-      mostrarMensaje('Completa todos los campos');
-      return;
+  if (password != confirmar) {
+    mostrarMensaje('Las contraseñas no coinciden');
+    return;
+  }
+
+  if (password.length < 6) {
+    mostrarMensaje(
+      'La contraseña debe tener mínimo 6 caracteres',
+    );
+    return;
+  }
+  if (cargando) return;
+  setState(() {
+    cargando = true;
+  });
+  try {
+    final credencial =
+        await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(
+      email: correo,
+      password: password,
+    );
+
+    final uid = credencial.user!.uid;
+
+    await FirebaseFirestore.instance
+        .collection('usuarios')
+        .doc(uid)
+        .set({
+      'uid': uid,
+      'nombre': nombre,
+      'correo': correo,
+      'telefono': telefono,
+      'rol': 'cliente',
+      'fechaRegistro': FieldValue.serverTimestamp(),
+    });
+
+    // Regresar al inicio de sesión
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    mostrarMensaje('Cuenta creada correctamente');
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const Login(),
+      ),
+    );
+  } on FirebaseAuthException catch (e) {
+    if (!mounted) return;
+    if (e.code == 'email-already-in-use') {
+      mostrarMensaje('Este correo ya está registrado');
+    } else if (e.code == 'invalid-email') {
+      mostrarMensaje('Ingresa un correo válido');
+    } else if (e.code == 'weak-password') {
+      mostrarMensaje('La contraseña es demasiado débil');
+    } else {
+      mostrarMensaje('Error de autenticación: ${e.code}');
     }
-    if (password != confirmar) {
-      mostrarMensaje('Las contraseñas no coinciden');
-      return;
-    }
-    if (password.length < 6) {
-      mostrarMensaje('La contraseña debe tener mínimo 6 caracteres');
-      return;
-    }
-    try {
+  } on FirebaseException catch (e) {
+    if (!mounted) return;
+    mostrarMensaje('No se pudieron guardar los datos: ${e.code}');
+  } catch (e) {
+    if (!mounted) return;
+    mostrarMensaje('Ocurrió un error al registrar la cuenta');
+  } finally {
+    if (mounted) {
       setState(() {
-        cargando = true;
+        cargando = false;
       });
-      final existe = await DatabaseHelper.instancia.correoExiste(correo);
-      if (existe) {
-        mostrarMensaje('Este correo ya está registrado');
-        return;
-      }
-      await DatabaseHelper.instancia.registrarUsuario(
-        nombre: nombre,
-        correo: correo,
-        telefono: telefono,
-        password: password,
-      );
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cuenta creada correctamente')),
-      );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const Login()),
-      );
-    } catch (e) {
-      print('ERROR AL REGISTRAR: $e');
-      if (!mounted) return;
-      mostrarMensaje('Error: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          cargando = false;
-        });
-      }
     }
   }
+}
+
 
   void mostrarMensaje(String mensaje) {
     ScaffoldMessenger.of(

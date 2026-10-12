@@ -18,7 +18,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       ruta,
-      version: 4,
+      version: 6,
       onCreate: _crearBaseDatos,
       onUpgrade: _actualizarBaseDatos,
     );
@@ -28,7 +28,50 @@ class DatabaseHelper {
     Database db,
     int oldVersion,
     int newVersion,
-  ) async {}
+  ) async {
+    if (oldVersion < 5) {
+      await db.execute('''
+      CREATE TABLE carrito(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuarioId INTEGER NOT NULL,
+        productoId INTEGER NOT NULL,
+        nombre TEXT NOT NULL,
+        precio REAL NOT NULL,
+        imagen TEXT,
+        cantidad INTEGER NOT NULL DEFAULT 1,
+        UNIQUE(usuarioId, productoId)
+      )
+    ''');
+
+      await db.execute('''
+      CREATE TABLE pedidos(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuarioId INTEGER NOT NULL,
+        fecha TEXT NOT NULL,
+        total REAL NOT NULL,
+        estado TEXT NOT NULL
+      )
+    ''');
+
+      await db.execute('''
+      CREATE TABLE detalle_pedido(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pedidoId INTEGER NOT NULL,
+        productoId INTEGER NOT NULL,
+        nombre TEXT NOT NULL,
+        precio REAL NOT NULL,
+        cantidad INTEGER NOT NULL,
+        subtotal REAL NOT NULL
+      )
+    ''');
+    }
+    if (oldVersion < 6) {
+      await db.execute('''
+    ALTER TABLE pedidos
+    ADD COLUMN fechaFinalizacion TEXT
+  ''');
+    }
+  }
 
   Future<void> _crearBaseDatos(Database db, int version) async {
     await db.execute('''
@@ -97,6 +140,42 @@ class DatabaseHelper {
       'password': 'Admin123',
       'rol': 'admin',
     });
+
+    await db.execute('''
+     CREATE TABLE carrito(
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       usuarioId INTEGER NOT NULL,
+       productoId INTEGER NOT NULL,
+       nombre TEXT NOT NULL,
+       precio REAL NOT NULL,
+       imagen TEXT,
+       cantidad INTEGER NOT NULL DEFAULT 1,
+       UNIQUE(usuarioId, productoId)
+      )
+    ''');
+
+    await db.execute('''
+     CREATE TABLE pedidos(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuarioId INTEGER NOT NULL,
+  fecha TEXT NOT NULL,
+  total REAL NOT NULL,
+  estado TEXT NOT NULL,
+  fechaFinalizacion TEXT
+)
+    ''');
+
+    await db.execute('''
+      CREATE TABLE detalle_pedido(
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       pedidoId INTEGER NOT NULL,
+       productoId INTEGER NOT NULL,
+       nombre TEXT NOT NULL,
+       precio REAL NOT NULL,
+       cantidad INTEGER NOT NULL,
+       subtotal REAL NOT NULL
+      )
+    ''');
   }
 
   Future<int> registrarUsuario({
@@ -339,5 +418,362 @@ class DatabaseHelper {
   Future<int> eliminarFavorito(int id) async {
     final db = await database;
     return await db.delete('favoritos', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ==================== CARRITO ====================
+
+  Future<int> agregarAlCarrito({
+    required int usuarioId,
+    required Map<String, dynamic> producto,
+  }) async {
+    final db = await database;
+
+    final existente = await db.query(
+      'carrito',
+      where: 'usuarioId = ? AND productoId = ?',
+      whereArgs: [usuarioId, producto['id']],
+      limit: 1,
+    );
+
+    if (existente.isNotEmpty) {
+      return await db.update(
+        'carrito',
+        {'cantidad': (existente.first['cantidad'] as int) + 1},
+        where: 'usuarioId = ? AND productoId = ?',
+        whereArgs: [usuarioId, producto['id']],
+      );
+    }
+
+    return await db.insert('carrito', {
+      'usuarioId': usuarioId,
+      'productoId': producto['id'],
+      'nombre': producto['nombre'],
+      'precio': producto['precio'],
+      'imagen': producto['imagen'],
+      'cantidad': 1,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerCarrito(int usuarioId) async {
+    final db = await database;
+
+    return await db.query(
+      'carrito',
+      where: 'usuarioId = ?',
+      whereArgs: [usuarioId],
+      orderBy: 'id DESC',
+    );
+  }
+
+  Future<int> aumentarCantidad(int id) async {
+    final db = await database;
+
+    final resultado = await db.query(
+      'carrito',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    if (resultado.isEmpty) return 0;
+
+    final cantidadActual = resultado.first['cantidad'] as int;
+
+    return await db.update(
+      'carrito',
+      {'cantidad': cantidadActual + 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> disminuirCantidad(int id) async {
+    final db = await database;
+
+    final resultado = await db.query(
+      'carrito',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    if (resultado.isEmpty) return 0;
+
+    final cantidadActual = resultado.first['cantidad'] as int;
+
+    if (cantidadActual <= 1) {
+      return await eliminarDelCarrito(id);
+    }
+
+    return await db.update(
+      'carrito',
+      {'cantidad': cantidadActual - 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> eliminarDelCarrito(int id) async {
+    final db = await database;
+    return await db.delete('carrito', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> vaciarCarrito(int usuarioId) async {
+    final db = await database;
+    return await db.delete(
+      'carrito',
+      where: 'usuarioId = ?',
+      whereArgs: [usuarioId],
+    );
+  }
+
+  Future<int> crearPedido({
+    required int usuarioId,
+    required double total,
+    required List<Map<String, dynamic>> productos,
+  }) async {
+    final db = await database;
+
+    final fecha = DateTime.now().toIso8601String();
+
+    final pedidoId = await db.insert('pedidos', {
+      'usuarioId': usuarioId,
+      'fecha': fecha,
+      'total': total,
+      'estado': 'Pendiente',
+    });
+
+    for (final producto in productos) {
+      final precio = (producto['precio'] as num).toDouble();
+      final cantidad = producto['cantidad'] as int;
+      final subtotal = precio * cantidad;
+
+      await db.insert('detalle_pedido', {
+        'pedidoId': pedidoId,
+        'productoId': producto['productoId'],
+        'nombre': producto['nombre'],
+        'precio': precio,
+        'cantidad': cantidad,
+        'subtotal': subtotal,
+      });
+    }
+
+    await vaciarCarrito(usuarioId);
+
+    return pedidoId;
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerPedidos() async {
+    await eliminarPedidosFinalizados();
+    final db = await database;
+
+    return await db.rawQuery('''
+    SELECT 
+      pedidos.id,
+      pedidos.usuarioId,
+      pedidos.fecha,
+      pedidos.total,
+      pedidos.estado,
+      usuarios.nombre AS cliente
+    FROM pedidos
+    LEFT JOIN usuarios
+      ON pedidos.usuarioId = usuarios.id
+    ORDER BY pedidos.id DESC
+  ''');
+  }
+
+  Future<bool> actualizarEstadoPedido({
+    required int pedidoId,
+    required String nuevoEstado,
+  }) async {
+    final db = await database;
+
+    final resultado = await db.query(
+      'pedidos',
+      where: 'id = ?',
+      whereArgs: [pedidoId],
+      limit: 1,
+    );
+
+    if (resultado.isEmpty) {
+      return false;
+    }
+
+    final estadoActual = resultado.first['estado'].toString();
+
+    bool permitido = false;
+
+    if (estadoActual == 'Pendiente') {
+      permitido = nuevoEstado == 'Aceptado' || nuevoEstado == 'Cancelado';
+    } else if (estadoActual == 'Aceptado') {
+      permitido = nuevoEstado == 'En preparación' || nuevoEstado == 'Cancelado';
+    } else if (estadoActual == 'En preparación') {
+      permitido = nuevoEstado == 'Listo';
+    } else if (estadoActual == 'Listo') {
+      permitido = nuevoEstado == 'Entregado';
+    }
+
+    if (!permitido) {
+      return false;
+    }
+
+    final datosActualizar = <String, dynamic>{'estado': nuevoEstado};
+
+    if (nuevoEstado == 'Cancelado' || nuevoEstado == 'Entregado') {
+      datosActualizar['fechaFinalizacion'] = DateTime.now().toIso8601String();
+    }
+
+    await db.update(
+      'pedidos',
+      datosActualizar,
+      where: 'id = ?',
+      whereArgs: [pedidoId],
+    );
+
+    return true;
+  }
+
+  Future<bool> aceptarPedido(int pedidoId) async {
+    final db = await database;
+
+    return await db.transaction((txn) async {
+      final pedido = await txn.query(
+        'pedidos',
+        where: 'id = ?',
+        whereArgs: [pedidoId],
+        limit: 1,
+      );
+
+      if (pedido.isEmpty) {
+        return false;
+      }
+
+      final estado = pedido.first['estado'].toString();
+
+      if (estado != 'Pendiente') {
+        return false;
+      }
+
+      final detalles = await txn.query(
+        'detalle_pedido',
+        where: 'pedidoId = ?',
+        whereArgs: [pedidoId],
+      );
+
+      // Primero comprobamos TODO el stock
+      for (final detalle in detalles) {
+        final productoId = detalle['productoId'] as int;
+        final cantidad = detalle['cantidad'] as int;
+
+        final producto = await txn.query(
+          'productos',
+          columns: ['stock'],
+          where: 'id = ?',
+          whereArgs: [productoId],
+          limit: 1,
+        );
+
+        if (producto.isEmpty) {
+          return false;
+        }
+
+        final stockActual = producto.first['stock'] as int;
+
+        if (stockActual < cantidad) {
+          return false;
+        }
+      }
+
+      // Si hay stock suficiente, ahora sí lo descontamos
+      for (final detalle in detalles) {
+        final productoId = detalle['productoId'] as int;
+        final cantidad = detalle['cantidad'] as int;
+
+        await txn.rawUpdate(
+          '''
+        UPDATE productos
+        SET stock = stock - ?
+        WHERE id = ?
+        ''',
+          [cantidad, productoId],
+        );
+      }
+
+      await txn.update(
+        'pedidos',
+        {'estado': 'Aceptado'},
+        where: 'id = ?',
+        whereArgs: [pedidoId],
+      );
+
+      return true;
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerPedidosUsuario(
+    int usuarioId,
+  ) async {
+    final db = await database;
+
+    return await db.query(
+      'pedidos',
+      where: 'usuarioId = ?',
+      whereArgs: [usuarioId],
+      orderBy: 'id DESC',
+    );
+  }
+
+  Future<void> eliminarPedidosFinalizados() async {
+    final db = await database;
+
+    final limite = DateTime.now().subtract(const Duration(hours: 12));
+
+    final pedidosFinalizados = await db.query(
+      'pedidos',
+      columns: ['id'],
+      where: '''
+      (estado = ? OR estado = ?)
+      AND fechaFinalizacion IS NOT NULL
+      AND fechaFinalizacion <= ?
+    ''',
+      whereArgs: ['Cancelado', 'Entregado', limite.toIso8601String()],
+    );
+
+    for (final pedido in pedidosFinalizados) {
+      final pedidoId = pedido['id'];
+
+      await db.delete(
+        'detalle_pedido',
+        where: 'pedidoId = ?',
+        whereArgs: [pedidoId],
+      );
+
+      await db.delete('pedidos', where: 'id = ?', whereArgs: [pedidoId]);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerDetallePedido(int pedidoId) async {
+    final db = await database;
+
+    return await db.query(
+      'detalle_pedido',
+      where: 'pedidoId = ?',
+      whereArgs: [pedidoId],
+      orderBy: 'id ASC',
+    );
+  }
+
+  Future<void> cancelarPedido(int pedidoId) async {
+    final db = await database;
+
+    await db.transaction((txn) async {
+      await txn.delete(
+        'detalle_pedido',
+        where: 'pedidoId = ?',
+        whereArgs: [pedidoId],
+      );
+
+      await txn.delete('pedidos', where: 'id = ?', whereArgs: [pedidoId]);
+    });
   }
 }

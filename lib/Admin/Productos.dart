@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
 import '../basedatos/database_helper.dart';
+import 'package:flutter/services.dart';
 
 class ProductosAdmin extends StatefulWidget {
   const ProductosAdmin({super.key});
@@ -163,14 +164,81 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                     foregroundColor: Colors.white,
                   ),
                   onPressed: () async {
+                    final precioValor = double.tryParse(precio.text);
+                    final stockValor = int.tryParse(stock.text);
+
+                    if (precioValor == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Ingresa un precio válido'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (precioValor < 5) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('El precio mínimo es de \$5.00'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (stockValor == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Ingresa un stock válido'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (stockValor < 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('El stock no puede ser negativo'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (nombre.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Ingresa el nombre del producto'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (categoria == null || categoria!.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Selecciona una categoría'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (imagenSeleccionada.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Selecciona una imagen')),
+                      );
+                      return;
+                    }
+
                     await DatabaseHelper.instancia.agregarProducto(
-                      nombre: nombre.text,
-                      descripcion: descripcion.text,
-                      precio: double.parse(precio.text),
+                      nombre: nombre.text.trim(),
+                      descripcion: descripcion.text.trim(),
+                      precio: precioValor,
                       imagen: imagenSeleccionada,
-                      categoria: categoria ?? '',
-                      stock: int.parse(stock.text),
+                      categoria: categoria!,
+                      stock: stockValor,
                     );
+
+                    if (!context.mounted) return;
+
                     Navigator.pop(context);
                     cargarProductos();
                   },
@@ -233,15 +301,57 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
+                    final precioValor = double.tryParse(precio.text);
+                    final stockValor = int.tryParse(stock.text);
+
+                    if (precioValor == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Ingresa un precio válido'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (precioValor < 5) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('El precio mínimo es de \$5.00'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (stockValor == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Ingresa un stock válido'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (stockValor < 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('El stock no puede ser negativo'),
+                        ),
+                      );
+                      return;
+                    }
+
                     await DatabaseHelper.instancia.actualizarProducto(
                       id: producto['id'],
-                      nombre: nombre.text,
-                      descripcion: descripcion.text,
-                      precio: double.parse(precio.text),
+                      nombre: nombre.text.trim(),
+                      descripcion: descripcion.text.trim(),
+                      precio: precioValor,
                       imagen: producto['imagen'],
                       categoria: categoria ?? '',
-                      stock: int.parse(stock.text),
+                      stock: stockValor,
                     );
+
+                    if (!context.mounted) return;
+
                     Navigator.pop(context);
                     cargarProductos();
                   },
@@ -256,10 +366,21 @@ class _ProductosAdminState extends State<ProductosAdmin> {
   }
 
   Widget campo(TextEditingController controlador, String texto) {
+    final esPrecio = texto == 'Precio';
+    final esStock = texto == 'Stock';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: controlador,
+        keyboardType: esPrecio || esStock
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : TextInputType.text,
+        inputFormatters: esPrecio
+            ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))]
+            : esStock
+            ? [FilteringTextInputFormatter.digitsOnly]
+            : [],
         decoration: InputDecoration(
           labelText: texto,
           filled: true,
@@ -328,14 +449,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                           ),
 
                           SizedBox(height: 6),
-
-                          Text(
-                            'Gestiona el catálogo de tu cafetería.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColores.textoSecundario,
-                            ),
-                          ),
                         ],
                       ),
                     ),

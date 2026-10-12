@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
 import '../basedatos/database_helper.dart';
+import '../sesion.dart';
 
 class FavoritosScreen extends StatefulWidget {
-  final int usuarioId;
-  const FavoritosScreen({super.key, required this.usuarioId});
+  const FavoritosScreen({super.key});
   @override
   State<FavoritosScreen> createState() => _FavoritosScreenState();
 }
@@ -18,9 +18,9 @@ class _FavoritosScreenState extends State<FavoritosScreen> {
   }
 
   Future<void> cargarFavoritos() async {
-    final datos = await DatabaseHelper.instancia.obtenerFavoritos(
-      widget.usuarioId,
-    );
+    final usuarioId = Sesion.usuarioId;
+    if (usuarioId == null) return;
+    final datos = await DatabaseHelper.instancia.obtenerFavoritos(usuarioId);
     if (!mounted) return;
     setState(() {
       favoritos = datos;

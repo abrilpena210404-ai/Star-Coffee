@@ -5,6 +5,8 @@ import '../Styles/Styles.dart';
 import '../basedatos/database_helper.dart';
 import '../Login.dart';
 import '../servicios/clima_service.dart';
+import '../sesion.dart';
+import 'ubicacion.dart';
 
 class InicioCliente extends StatefulWidget {
   const InicioCliente({super.key});
@@ -61,7 +63,9 @@ class _InicioClienteState extends State<InicioCliente> {
   }
 
   Future<void> cargarFavoritos() async {
-    final datos = await DatabaseHelper.instancia.obtenerFavoritos(1);
+    final datos = await DatabaseHelper.instancia.obtenerFavoritos(
+      Sesion.usuarioId!,
+    );
     if (!mounted) return;
     setState(() {
       favoritosIds = datos.map((e) => e['productoId'] as int).toList();
@@ -71,14 +75,16 @@ class _InicioClienteState extends State<InicioCliente> {
   Future<void> cambiarFavorito(Map<String, dynamic> producto) async {
     final id = producto['id'];
     if (favoritosIds.contains(id)) {
-      final favoritos = await DatabaseHelper.instancia.obtenerFavoritos(1);
+      final favoritos = await DatabaseHelper.instancia.obtenerFavoritos(
+        Sesion.usuarioId!,
+      );
       final favoritoEncontrado = favoritos.firstWhere(
         (f) => f['productoId'] == id,
       );
       await DatabaseHelper.instancia.eliminarFavorito(favoritoEncontrado['id']);
     } else {
       await DatabaseHelper.instancia.agregarFavorito(
-        usuarioId: 1,
+        usuarioId: Sesion.usuarioId!,
         producto: producto,
       );
     }
@@ -373,7 +379,6 @@ class _InicioClienteState extends State<InicioCliente> {
                   onPressed: () {
                     cambiarFavorito(producto);
                   },
-                  icon: const Icon(Icons.favorite),
                   label: const Text('Agregar a favoritos'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColores.cafeOscuro,
@@ -1006,6 +1011,10 @@ class _InicioClienteState extends State<InicioCliente> {
                 tarjetaHorarios(context),
 
                 const SizedBox(height: 15),
+
+                tarjetaUbicacion(context),
+
+                const SizedBox(height: 15),
               ],
             ),
           ),
@@ -1233,6 +1242,66 @@ class _InicioClienteState extends State<InicioCliente> {
                 ],
               ),
             ),
+            const Icon(Icons.chevron_right, color: AppColores.cafeOscuro),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget tarjetaUbicacion(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const UbicacionScreen()),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 22),
+        padding: const EdgeInsets.all(18),
+        decoration: AppEstilos.tarjeta(),
+        child: Row(
+          children: [
+            Container(
+              width: 45,
+              height: 45,
+              decoration: const BoxDecoration(
+                color: AppColores.beige,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.location_on_rounded,
+                color: AppColores.cafeOscuro,
+              ),
+            ),
+
+            const SizedBox(width: 15),
+
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ver ubicación',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColores.textoPrincipal,
+                    ),
+                  ),
+
+                  SizedBox(height: 5),
+
+                  Text(
+                    'Encuentra Star Coffee en el mapa',
+                    style: TextStyle(color: AppColores.textoSecundario),
+                  ),
+                ],
+              ),
+            ),
+
             const Icon(Icons.chevron_right, color: AppColores.cafeOscuro),
           ],
         ),

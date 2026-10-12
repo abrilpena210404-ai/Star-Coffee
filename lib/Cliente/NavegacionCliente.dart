@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'InicioCliente.dart';
 import 'Catalogo.dart';
 import 'Favoritos.dart';
-import 'Ubicacion.dart';
 import '../Styles/Styles.dart';
+import 'Mispedidos.dart';
 
 class NavegacionCliente extends StatefulWidget {
   const NavegacionCliente({super.key});
@@ -16,8 +16,8 @@ class _NavegacionClienteState extends State<NavegacionCliente> {
   final List<Widget> paginas = [
     const InicioCliente(),
     const CatalogoScreen(),
-    const FavoritosScreen(usuarioId: 1),
-    const UbicacionScreen(),
+    const FavoritosScreen(),
+    const MisPedidosScreen(),
   ];
   void cambiarPagina(int index) {
     setState(() {
@@ -57,7 +57,7 @@ class _NavegacionClienteState extends State<NavegacionCliente> {
                   texto: 'Favoritos',
                   index: 2,
                 ),
-                boton(icono: Icons.location_on_rounded, texto: 'Más', index: 3),
+                boton(icono: Icons.receipt_rounded, texto: 'Mis Pedidos', index: 3),
               ],
             ),
           ),
