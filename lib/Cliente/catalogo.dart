@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:star_coffee/Cliente/DetalleProducto.dart';
 import '../Styles/Styles.dart';
-import 'package:star_coffee/basedatos/database_helper.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:star_coffee/Cliente/carrito.dart';
 
 class CatalogoScreen extends StatefulWidget {
@@ -23,20 +24,107 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
     cargarCategorias();
   }
 
-  Future<void> cargarProductos() async {
-    final datos = await DatabaseHelper.instancia.obtenerProductos();
-    if (!mounted) return;
-    setState(() {
-      productos = datos;
-    });
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _productosSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _categoriasSub;
+  String? errorCarga;
+
+  void cargarProductos() {
+    _productosSub = FirebaseFirestore.instance
+        .collection('productos')
+        .where('activo', isEqualTo: true)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            final datos = snapshot.docs
+                .map((doc) => <String, dynamic>{...doc.data(), 'id': doc.id})
+                .toList();
+            datos.sort(
+              (a, b) => a['nombre'].toString().toLowerCase().compareTo(
+                b['nombre'].toString().toLowerCase(),
+              ),
+            );
+            if (!mounted) return;
+            setState(() {
+              productos = datos;
+              errorCarga = null;
+            });
+          },
+          onError: (Object error) {
+            if (!mounted) return;
+            setState(() => errorCarga = 'No se pudieron cargar los productos');
+            debugPrint('Error al consultar productos: $error');
+          },
+        );
   }
 
-  Future<void> cargarCategorias() async {
-    final datos = await DatabaseHelper.instancia.obtenerCategorias();
-    if (!mounted) return;
-    setState(() {
-      categorias = datos;
-    });
+  void cargarCategorias() {
+    _categoriasSub = FirebaseFirestore.instance
+        .collection('categorias')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            final datos = snapshot.docs
+                .map((doc) => <String, dynamic>{...doc.data(), 'id': doc.id})
+                .toList();
+            datos.sort(
+              (a, b) => a['nombre'].toString().toLowerCase().compareTo(
+                b['nombre'].toString().toLowerCase(),
+              ),
+            );
+            if (!mounted) return;
+            setState(() {
+              categorias = datos;
+              if (categoriaSeleccionada != 'Todos' &&
+                  !categorias.any(
+                    (c) => c['nombre'] == categoriaSeleccionada,
+                  )) {
+                categoriaSeleccionada = 'Todos';
+              }
+            });
+          },
+          onError: (Object error) {
+            debugPrint('Error al consultar categorías: $error');
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No se pudieron cargar las categorías'),
+              ),
+            );
+          },
+        );
+  }
+
+  Widget imagenProducto(String imagen) {
+    Widget respaldo() => Container(
+      color: AppColores.beige,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.local_cafe_rounded,
+        size: 48,
+        color: AppColores.cafeOscuro,
+      ),
+    );
+
+    if (imagen.isEmpty) return respaldo();
+    if (imagen.startsWith('https://')) {
+      return Image.network(
+        imagen,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => respaldo(),
+      );
+    }
+    return Image.asset(
+      imagen,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => respaldo(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _productosSub?.cancel();
+    _categoriasSub?.cancel();
+    super.dispose();
   }
 
   List<Map<String, dynamic>> get productosFiltrados {
@@ -211,6 +299,14 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
 
               const SizedBox(height: 15),
 
+              if (errorCarga != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    errorCarga!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
               Expanded(
                 child: productosFiltrados.isEmpty
                     ? Center(
@@ -383,32 +479,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  imagen.isNotEmpty
-                      ? Image.asset(
-                          imagen,
-                          fit: BoxFit.cover,
-
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: AppColores.beige,
-
-                              child: const Icon(
-                                Icons.local_cafe_rounded,
-                                size: 48,
-                                color: AppColores.cafeOscuro,
-                              ),
-                            );
-                          },
-                        )
-                      : Container(
-                          color: AppColores.beige,
-
-                          child: const Icon(
-                            Icons.local_cafe_rounded,
-                            size: 48,
-                            color: AppColores.cafeOscuro,
-                          ),
-                        ),
+                  imagenProducto(imagen),
 
                   // DEGRADADO MUY SUAVE EN LA FOTO
                   Positioned(

@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../servicios/star_coffee_api.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'Catalogo.dart';
 import '../Styles/Styles.dart';
-import '../basedatos/database_helper.dart';
 import '../Login.dart';
 import '../servicios/clima_service.dart';
 import '../sesion.dart';
@@ -18,9 +20,19 @@ class _InicioClienteState extends State<InicioCliente> {
   String nombreUsuario = 'Cliente';
   List<Map<String, dynamic>> promociones = [];
   List<Map<String, dynamic>> productos = [];
-  List<int> favoritosIds = [];
+  List<String> favoritosIds = [];
   Map<String, dynamic>? clima;
   bool cargandoClima = true;
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  productosSubscription;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  promocionesSubscription;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  favoritosSubscription;
 
   final PageController clienteBannerController = PageController();
   Timer? clienteBannerTimer;
@@ -43,52 +55,124 @@ class _InicioClienteState extends State<InicioCliente> {
     cargarClima();
   }
 
-  Future<void> cargarPromociones() async {
-    final datos = await DatabaseHelper.instancia.obtenerPromociones();
-    final activas = datos.where((promo) {
-      return promo['estado'] == 'Activa';
-    }).toList();
-    if (!mounted) return;
-    setState(() {
-      promociones = activas;
-    });
+  void cargarProductos() {
+    productosSubscription?.cancel();
+
+    productosSubscription = firestore
+        .collection('productos')
+        .where('activo', isEqualTo: true)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            final lista = snapshot.docs.map((doc) {
+              return {...doc.data(), 'id': doc.id};
+            }).toList();
+
+            lista.sort(
+              (a, b) => a['nombre'].toString().toLowerCase().compareTo(
+                b['nombre'].toString().toLowerCase(),
+              ),
+            );
+
+            if (!mounted) return;
+
+            setState(() {
+              productos = lista;
+            });
+          },
+          onError: (error) {
+            debugPrint('Error cargando productos: $error');
+          },
+        );
   }
 
-  Future<void> cargarProductos() async {
-    final datos = await DatabaseHelper.instancia.obtenerProductos();
-    if (!mounted) return;
-    setState(() {
-      productos = datos;
-    });
+  void cargarPromociones() {
+    promocionesSubscription?.cancel();
+
+    promocionesSubscription = firestore
+        .collection('promociones')
+        .where('estado', isEqualTo: 'Activa')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+
+            setState(() {
+              promociones = snapshot.docs.map((doc) {
+                return {...doc.data(), 'id': doc.id};
+              }).toList();
+            });
+          },
+          onError: (error) {
+            debugPrint('Error cargando promociones: $error');
+          },
+        );
   }
 
-  Future<void> cargarFavoritos() async {
-    final datos = await DatabaseHelper.instancia.obtenerFavoritos(
-      Sesion.usuarioId!,
-    );
-    if (!mounted) return;
-    setState(() {
-      favoritosIds = datos.map((e) => e['productoId'] as int).toList();
-    });
+  void cargarFavoritos() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) return;
+
+    favoritosSubscription?.cancel();
+
+    favoritosSubscription = firestore
+        .collection('usuarios')
+        .doc(uid)
+        .collection('favoritos')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+
+            setState(() {
+              favoritosIds = snapshot.docs.map((doc) => doc.id).toList();
+            });
+          },
+          onError: (error) {
+            debugPrint('Error cargando favoritos: $error');
+          },
+        );
   }
 
   Future<void> cambiarFavorito(Map<String, dynamic> producto) async {
-    final id = producto['id'];
-    if (favoritosIds.contains(id)) {
-      final favoritos = await DatabaseHelper.instancia.obtenerFavoritos(
-        Sesion.usuarioId!,
-      );
-      final favoritoEncontrado = favoritos.firstWhere(
-        (f) => f['productoId'] == id,
-      );
-      await DatabaseHelper.instancia.eliminarFavorito(favoritoEncontrado['id']);
-    } else {
-      await DatabaseHelper.instancia.agregarFavorito(
-        usuarioId: Sesion.usuarioId!,
-        producto: producto,
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) return;
+
+    final productoId = producto['id'].toString();
+
+    final referencia = firestore
+        .collection('usuarios')
+        .doc(uid)
+        .collection('favoritos')
+        .doc(productoId);
+
+    try {
+      final documento = await referencia.get();
+
+      if (documento.exists) {
+        await referencia.delete();
+      } else {
+        await referencia.set({
+          'productoId': productoId,
+          'nombre': producto['nombre'],
+          'descripcion': producto['descripcion'] ?? '',
+          'precio': producto['precio'],
+          'imagen': producto['imagen'] ?? '',
+          'categoria': producto['categoria'] ?? '',
+          'fecha': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al modificar favorito: $e');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo actualizar favoritos')),
       );
     }
-    cargarFavoritos();
   }
 
   Future<void> cargarClima() async {
@@ -150,20 +234,7 @@ class _InicioClienteState extends State<InicioCliente> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.asset(
-                      imagen,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: AppColores.beige,
-                          child: const Icon(
-                            Icons.local_cafe_rounded,
-                            size: 48,
-                            color: AppColores.cafeOscuro,
-                          ),
-                        );
-                      },
-                    ),
+                    imagenProducto(imagen),
 
                     // DEGRADADO SUAVE SOBRE FOTO
                     Positioned(
@@ -338,7 +409,7 @@ class _InicioClienteState extends State<InicioCliente> {
                   ),
 
                   child: producto['imagen'] != null && producto['imagen'] != ''
-                      ? Image.asset(producto['imagen'], fit: BoxFit.cover)
+                      ? imagenProducto(producto['imagen']?.toString() ?? '')
                       : const Icon(
                           Icons.local_cafe,
                           size: 70,
@@ -611,8 +682,15 @@ class _InicioClienteState extends State<InicioCliente> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        onSelected: (value) {
+
+                        onSelected: (value) async {
                           if (value == 'cerrar') {
+                            await FirebaseAuth.instance.signOut();
+
+                            Sesion.cerrar();
+
+                            if (!mounted) return;
+
                             Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(builder: (_) => const Login()),
@@ -620,6 +698,7 @@ class _InicioClienteState extends State<InicioCliente> {
                             );
                           }
                         },
+
                         itemBuilder: (context) => [
                           const PopupMenuItem<String>(
                             value: 'cerrar',
@@ -1057,24 +1136,7 @@ class _InicioClienteState extends State<InicioCliente> {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(20),
                   ),
-                  child: Image.asset(
-                    imagen,
-                    height: 135,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 135,
-                        width: double.infinity,
-                        color: AppColores.beige,
-                        child: const Icon(
-                          Icons.coffee,
-                          size: 55,
-                          color: AppColores.cafeOscuro,
-                        ),
-                      );
-                    },
-                  ),
+                  child: imagenProducto(imagen),
                 ),
               ),
 
@@ -1359,8 +1421,44 @@ class _InicioClienteState extends State<InicioCliente> {
   void dispose() {
     clienteBannerTimer?.cancel();
     clienteBannerController.dispose();
+    productosSubscription?.cancel();
+    promocionesSubscription?.cancel();
+    favoritosSubscription?.cancel();
     super.dispose();
   }
+}
+
+Widget imagenProducto(String ruta, {BoxFit fit = BoxFit.cover}) {
+  Widget errorImagen() {
+    return Container(
+      color: AppColores.beige,
+      child: const Center(
+        child: Icon(
+          Icons.local_cafe_rounded,
+          size: 48,
+          color: AppColores.cafeOscuro,
+        ),
+      ),
+    );
+  }
+
+  if (ruta.isEmpty) {
+    return errorImagen();
+  }
+
+  if (ruta.startsWith('https://')) {
+    return Image.network(
+      ruta,
+      fit: fit,
+      errorBuilder: (_, __, ___) => errorImagen(),
+    );
+  }
+
+  return Image.asset(
+    ruta,
+    fit: fit,
+    errorBuilder: (_, __, ___) => errorImagen(),
+  );
 }
 
 class ContainerPromocion extends StatelessWidget {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
-import '../basedatos/database_helper.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Repositorio/pedidos_firebase.dart';
 
 class PedidosAdmin extends StatefulWidget {
   const PedidosAdmin({super.key});
@@ -11,6 +13,21 @@ class PedidosAdmin extends StatefulWidget {
 
 class _PedidosAdminState extends State<PedidosAdmin> {
   List<Map<String, dynamic>> pedidos = [];
+  final PedidosFirebase repositorio = PedidosFirebase();
+  StreamSubscription<List<Map<String, dynamic>>>? _suscripcion;
+
+  @override
+  void dispose() {
+    _suscripcion?.cancel();
+    super.dispose();
+  }
+
+  void aviso(String mensaje) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
+  }
 
   @override
   void initState() {
@@ -18,61 +35,63 @@ class _PedidosAdminState extends State<PedidosAdmin> {
     cargarPedidos();
   }
 
-  Future<void> cargarPedidos() async {
-    final datos = await DatabaseHelper.instancia.obtenerPedidos();
-
-    if (!mounted) return;
-
-    setState(() {
-      pedidos = datos;
-    });
+  void cargarPedidos() {
+    _suscripcion?.cancel();
+    _suscripcion = repositorio.escucharPedidos().listen(
+      (datos) {
+        if (!mounted) return;
+        setState(() => pedidos = datos);
+      },
+      onError: (Object error) {
+        aviso('No se pudieron cargar los pedidos: $error');
+      },
+    );
   }
 
-  Future<void> mostrarDetalle(int pedidoId) async {
-    final productos = await DatabaseHelper.instancia.obtenerDetallePedido(
-      pedidoId,
-    );
-
-    if (!mounted) return;
-
-    showDialog(
+  Future<void> mostrarDetalle(String pedidoId) async {
+    final pedido = pedidos.where((p) => p['id'] == pedidoId).firstOrNull;
+    if (pedido == null || !mounted) return;
+    final productos = repositorio.detalle(pedido);
+    await showDialog<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColores.cremaClaro,
-          title: Text(
-            'Pedido #$pedidoId',
-            style: const TextStyle(
-              color: AppColores.cafeOscuro,
-              fontWeight: FontWeight.bold,
-            ),
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColores.cremaClaro,
+        title: Text(
+          'Pedido #${pedido['id'].toString().length > 8 ? pedido['id'].toString().substring(0, 8).toUpperCase() : pedido['id']}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColores.cafeOscuro,
+            fontWeight: FontWeight.bold,
           ),
-          content: productos.isEmpty
-              ? const Text('No hay productos en este pedido.')
-              : Column(
+        ),
+        content: productos.isEmpty
+            ? const Text('No hay productos en este pedido.')
+            : SingleChildScrollView(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: productos.map((producto) {
+                    final precio =
+                        (producto['precio'] as num?)?.toDouble() ?? 0;
+                    final cantidad =
+                        (producto['cantidad'] as num?)?.toInt() ?? 0;
+                    final subtotal = precio * cantidad;
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
                         children: [
                           Expanded(
                             child: Text(
-                              producto['nombre'],
+                              producto['nombre']?.toString() ?? 'Producto',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                          Text(
-                            'x${producto['cantidad']}',
-                            style: const TextStyle(
-                              color: AppColores.textoSecundario,
-                            ),
-                          ),
+                          Text('x$cantidad'),
                           const SizedBox(width: 15),
                           Text(
-                            '\$${(producto['subtotal'] as num).toStringAsFixed(2)}',
+                            '\$${subtotal.toStringAsFixed(2)}',
                             style: const TextStyle(
                               color: AppColores.cafeOscuro,
                               fontWeight: FontWeight.bold,
@@ -83,68 +102,50 @@ class _PedidosAdminState extends State<PedidosAdmin> {
                     );
                   }).toList(),
                 ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Cerrar'),
-            ),
-          ],
-        );
-      },
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
     );
   }
 
-  Future<void> cambiarEstado(int pedidoId, String nuevoEstado) async {
-    final correcto = await DatabaseHelper.instancia.actualizarEstadoPedido(
-      pedidoId: pedidoId,
-      nuevoEstado: nuevoEstado,
-    );
-
-    await cargarPedidos();
-
-    if (!mounted) return;
-
-    if (!correcto) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se puede realizar ese cambio de estado'),
-        ),
+  Future<void> cambiarEstado(String pedidoId, String nuevoEstado) async {
+    try {
+      final correcto = await repositorio.cambiarEstado(
+        pedidoId: pedidoId,
+        nuevoEstado: nuevoEstado,
       );
+      if (!correcto) aviso('No se puede realizar ese cambio de estado');
+    } catch (e) {
+      aviso('No se pudo actualizar el pedido: $e');
     }
   }
 
-  Future<void> aceptarPedido(int pedidoId) async {
-    final aceptado = await DatabaseHelper.instancia.aceptarPedido(pedidoId);
-
-    await cargarPedidos();
-
-    if (!mounted) return;
-
-    if (aceptado) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pedido aceptado correctamente')),
+  Future<void> aceptarPedido(String pedidoId) async {
+    try {
+      final aceptado = await repositorio.aceptarPedido(pedidoId);
+      aviso(
+        aceptado
+            ? 'Pedido aceptado correctamente'
+            : 'No se puede aceptar: verifica stock, precios y estado del pedido',
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No hay suficiente stock para aceptar este pedido'),
-        ),
-      );
+    } catch (e) {
+      aviso('Error al aceptar el pedido: $e');
     }
   }
 
-  String formatoFecha(String fecha) {
-    final fechaConvertida = DateTime.tryParse(fecha);
-
-    if (fechaConvertida == null) {
-      return fecha;
-    }
-
-    return '${fechaConvertida.day.toString().padLeft(2, '0')}/'
-        '${fechaConvertida.month.toString().padLeft(2, '0')}/'
-        '${fechaConvertida.year}';
+  String formatoFecha(dynamic fecha) {
+    DateTime? valor;
+    if (fecha is Timestamp) valor = fecha.toDate();
+    if (fecha is String) valor = DateTime.tryParse(fecha);
+    if (fecha is DateTime) valor = fecha;
+    if (valor == null) return 'Sin fecha';
+    return '${valor.day.toString().padLeft(2, '0')}/'
+        '${valor.month.toString().padLeft(2, '0')}/${valor.year}';
   }
 
   @override
@@ -283,7 +284,7 @@ class _PedidosAdminState extends State<PedidosAdmin> {
 
   Widget accionesPedido(Map<String, dynamic> pedido) {
     final estado = pedido['estado'].toString();
-    final id = pedido['id'] as int;
+    final id = pedido['id'].toString();
 
     switch (estado) {
       case 'Pendiente':

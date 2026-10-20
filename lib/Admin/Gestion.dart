@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:star_coffee/Admin/Usuarios.dart';
 import '../Styles/Styles.dart';
-import '../basedatos/database_helper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Repositorio/categoria_firebase.dart';
 
 class Gestion extends StatefulWidget {
   const Gestion({super.key});
@@ -10,6 +11,8 @@ class Gestion extends StatefulWidget {
 }
 
 class _GestionState extends State<Gestion> {
+  final CategoriaFirebase _categoriaRepo = CategoriaFirebase();
+
   List<Map<String, dynamic>> categorias = [];
   List<Map<String, dynamic>> usuarios = [];
 
@@ -20,23 +23,40 @@ class _GestionState extends State<Gestion> {
     cargarUsuarios();
   }
 
-  Future<void> cargarCategorias() async {
-    final datos = await DatabaseHelper.instancia.obtenerCategorias();
+  void mostrarMensaje(String mensaje) {
     if (!mounted) return;
-    setState(() {
-      categorias = datos;
-    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
+  }
+
+  Future<void> cargarCategorias() async {
+    try {
+      final datos = await _categoriaRepo.obtenerCategorias();
+      if (!mounted) return;
+      setState(() => categorias = datos);
+    } catch (e) {
+      mostrarMensaje('No se pudieron cargar las categorías: $e');
+    }
   }
 
   Future<void> cargarUsuarios() async {
-    final datos = await DatabaseHelper.instancia.obtenerUsuarios();
-    final clientes = datos.where((usuario) {
-      return usuario['rol'] == 'cliente';
-    }).toList();
-    if (!mounted) return;
-    setState(() {
-      usuarios = clientes;
-    });
+    try {
+      final resultado = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .where('rol', isEqualTo: 'cliente')
+          .get();
+      final clientes = resultado.docs
+          .map((doc) => {...doc.data(), 'id': doc.id})
+          .toList();
+      clientes.sort(
+        (a, b) => a['nombre'].toString().compareTo(b['nombre'].toString()),
+      );
+      if (!mounted) return;
+      setState(() => usuarios = clientes);
+    } catch (e) {
+      mostrarMensaje('No se pudieron cargar los usuarios: $e');
+    }
   }
 
   Future<void> agregarCategoria() async {
@@ -73,11 +93,15 @@ class _GestionState extends State<Gestion> {
                 if (controller.text.trim().isEmpty) {
                   return;
                 }
-                await DatabaseHelper.instancia.agregarCategoria(
-                  controller.text.trim(),
-                );
-                Navigator.pop(context);
-                cargarCategorias();
+                try {
+                  await _categoriaRepo.agregarCategoria(controller.text.trim());
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  await cargarCategorias();
+                  mostrarMensaje('Categoría agregada correctamente');
+                } catch (e) {
+                  mostrarMensaje('No se pudo agregar: $e');
+                }
               },
               child: const Text('Guardar'),
             ),
@@ -87,9 +111,14 @@ class _GestionState extends State<Gestion> {
     );
   }
 
-  Future<void> eliminarCategoria(int id) async {
-    await DatabaseHelper.instancia.eliminarCategoria(id);
-    cargarCategorias();
+  Future<void> eliminarCategoria(String id) async {
+    try {
+      await _categoriaRepo.eliminarCategoria(id);
+      await cargarCategorias();
+      mostrarMensaje('Categoría eliminada');
+    } catch (e) {
+      mostrarMensaje('No se pudo eliminar: $e');
+    }
   }
 
   Future<void> editarCategoria(Map<String, dynamic> categoria) async {
@@ -124,12 +153,18 @@ class _GestionState extends State<Gestion> {
                 foregroundColor: Colors.white,
               ),
               onPressed: () async {
-                await DatabaseHelper.instancia.actualizarCategoria(
-                  id: categoria['id'],
-                  nombre: nombre.text,
-                );
-                Navigator.pop(context);
-                cargarCategorias();
+                try {
+                  await _categoriaRepo.actualizarCategoria(
+                    id: categoria['id'].toString(),
+                    nombre: nombre.text,
+                  );
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  await cargarCategorias();
+                  mostrarMensaje('Categoría actualizada');
+                } catch (e) {
+                  mostrarMensaje('No se pudo actualizar: $e');
+                }
               },
               child: const Text('Guardar'),
             ),
@@ -375,7 +410,9 @@ class _GestionState extends State<Gestion> {
                                     icono: Icons.delete_outline_rounded,
                                     color: Colors.red,
                                     onTap: () {
-                                      eliminarCategoria(categoria['id']);
+                                      eliminarCategoria(
+                                        categoria['id'].toString(),
+                                      );
                                     },
                                   ),
                                 ],
@@ -586,11 +623,11 @@ class _GestionState extends State<Gestion> {
                                 _botonGestion(
                                   icono: Icons.delete_outline_rounded,
                                   color: Colors.red,
-                                  onTap: () async {
-                                    await DatabaseHelper.instancia
-                                        .eliminarUsuario(usuario['id']);
-
-                                    cargarUsuarios();
+                                  onTap: () {
+                                    mostrarMensaje(
+                                      'La eliminación de cuentas estará disponible '
+                                      'cuando configuremos un proceso seguro en Firebase.',
+                                    );
                                   },
                                 ),
                               ],

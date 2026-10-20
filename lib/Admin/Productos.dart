@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
-import '../basedatos/database_helper.dart';
+import '../Repositorio/producto_firebase.dart';
+import '../Repositorio/categoria_firebase.dart';
 import 'package:flutter/services.dart';
 
 class ProductosAdmin extends StatefulWidget {
   const ProductosAdmin({super.key});
-
   @override
   State<ProductosAdmin> createState() => _ProductosAdminState();
 }
 
 class _ProductosAdminState extends State<ProductosAdmin> {
+  final ProductoFirebase _productosFirebase = ProductoFirebase();
+  final CategoriaFirebase _categoriasFirebase = CategoriaFirebase();
+
   List<Map<String, dynamic>> productos = [];
   List<Map<String, dynamic>> categorias = [];
   List<Map<String, dynamic>> productosFiltrados = [];
-
   final TextEditingController buscarController = TextEditingController();
-
+  @override
   void initState() {
     super.initState();
     cargarProductos();
@@ -24,12 +26,16 @@ class _ProductosAdminState extends State<ProductosAdmin> {
   }
 
   Future<void> cargarProductos() async {
-    final datos = await DatabaseHelper.instancia.obtenerProductos();
-    if (!mounted) return;
-    setState(() {
-      productos = datos;
-      productosFiltrados = datos;
-    });
+    try {
+      final datos = await _productosFirebase.obtenerProductos();
+      if (!mounted) return;
+      setState(() {
+        productos = datos;
+      });
+      buscarProducto(buscarController.text);
+    } catch (e) {
+      _mostrarError('No se pudieron cargar los productos', e);
+    }
   }
 
   void buscarProducto(String texto) {
@@ -43,14 +49,31 @@ class _ProductosAdminState extends State<ProductosAdmin> {
   }
 
   Future<void> cargarCategorias() async {
-    final datos = await DatabaseHelper.instancia.obtenerCategorias();
+    try {
+      final datos = await _categoriasFirebase.obtenerCategorias();
+      if (!mounted) return;
+      setState(() => categorias = datos);
+    } catch (e) {
+      _mostrarError('No se pudieron cargar las categorías', e);
+    }
+  }
+
+  void _mostrarError(String mensaje, Object error) {
     if (!mounted) return;
-    setState(() {
-      categorias = datos;
-    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$mensaje: $error')));
+  }
+
+  @override
+  void dispose() {
+    buscarController.dispose();
+    super.dispose();
   }
 
   Future<void> agregarProducto() async {
+    await cargarCategorias();
+    if (!mounted) return;
     final nombre = TextEditingController();
     final descripcion = TextEditingController();
     final precio = TextEditingController();
@@ -65,10 +88,8 @@ class _ProductosAdminState extends State<ProductosAdmin> {
       {'nombre': 'cheescake', 'ruta': 'assets/images/cheescake.jpg'},
       {'nombre': 'capuccino', 'ruta': 'assets/images/capuccino.jpg'},
     ];
-
     String? categoria;
     String imagenSeleccionada = '';
-
     await showDialog(
       context: context,
       builder: (context) {
@@ -83,7 +104,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               content: SingleChildScrollView(
                 child: Column(
                   children: [
@@ -91,9 +111,10 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                     campo(descripcion, 'Descripción'),
                     campo(precio, 'Precio'),
                     campo(stock, 'Stock'),
-
                     DropdownButtonFormField<String>(
-                      value: categoria,
+                      value: categorias.any((c) => c['nombre'] == categoria)
+                          ? categoria
+                          : null,
                       decoration: const InputDecoration(labelText: 'Categoría'),
                       items: categorias.map((categoriaBD) {
                         return DropdownMenuItem<String>(
@@ -109,7 +130,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       hint: const Text('Selecciona categoría'), //PENDIENTE
                     ),
                     const SizedBox(height: 15),
-
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -117,9 +137,7 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
-
                     const SizedBox(height: 10),
-
                     DropdownButtonFormField<String>(
                       value: imagenSeleccionada.isEmpty
                           ? null
@@ -132,16 +150,13 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                           borderRadius: BorderRadius.circular(15),
                         ),
                       ),
-
                       hint: const Text('Selecciona una imagen'),
-
                       items: imagenes.map((imagen) {
                         return DropdownMenuItem<String>(
                           value: imagen['ruta']!,
                           child: Text(imagen['nombre']!),
                         );
                       }).toList(),
-
                       onChanged: (valor) {
                         cambiarEstado(() {
                           imagenSeleccionada = valor ?? '';
@@ -166,7 +181,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                   onPressed: () async {
                     final precioValor = double.tryParse(precio.text);
                     final stockValor = int.tryParse(stock.text);
-
                     if (precioValor == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -175,7 +189,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (precioValor < 5) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -184,7 +197,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (stockValor == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -193,7 +205,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (stockValor < 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -202,7 +213,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (nombre.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -211,7 +221,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (categoria == null || categoria!.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -220,27 +229,27 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (imagenSeleccionada.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Selecciona una imagen')),
                       );
                       return;
                     }
-
-                    await DatabaseHelper.instancia.agregarProducto(
-                      nombre: nombre.text.trim(),
-                      descripcion: descripcion.text.trim(),
-                      precio: precioValor,
-                      imagen: imagenSeleccionada,
-                      categoria: categoria!,
-                      stock: stockValor,
-                    );
-
-                    if (!context.mounted) return;
-
-                    Navigator.pop(context);
-                    cargarProductos();
+                    try {
+                      await _productosFirebase.agregarProducto(
+                        nombre: nombre.text.trim(),
+                        descripcion: descripcion.text.trim(),
+                        precio: precioValor,
+                        imagen: imagenSeleccionada,
+                        categoria: categoria!,
+                        stock: stockValor,
+                      );
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      await cargarProductos();
+                    } catch (e) {
+                      _mostrarError('No se pudo guardar el producto', e);
+                    }
                   },
                   child: const Text('Guardar'),
                 ),
@@ -257,8 +266,9 @@ class _ProductosAdminState extends State<ProductosAdmin> {
     final descripcion = TextEditingController(text: producto['descripcion']);
     final precio = TextEditingController(text: producto['precio'].toString());
     final stock = TextEditingController(text: producto['stock'].toString());
+    await cargarCategorias();
+    if (!mounted) return;
     String? categoria = producto['categoria'];
-
     await showDialog(
       context: context,
       builder: (context) {
@@ -275,7 +285,9 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                     campo(precio, 'Precio'),
                     campo(stock, 'Stock'),
                     DropdownButtonFormField<String>(
-                      value: categoria,
+                      value: categorias.any((c) => c['nombre'] == categoria)
+                          ? categoria
+                          : null,
                       decoration: const InputDecoration(labelText: 'Categoría'),
                       items: categorias.map<DropdownMenuItem<String>>((cat) {
                         return DropdownMenuItem<String>(
@@ -303,7 +315,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                   onPressed: () async {
                     final precioValor = double.tryParse(precio.text);
                     final stockValor = int.tryParse(stock.text);
-
                     if (precioValor == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -312,7 +323,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (precioValor < 5) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -321,7 +331,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (stockValor == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -330,7 +339,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
                     if (stockValor < 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -339,21 +347,31 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       );
                       return;
                     }
-
-                    await DatabaseHelper.instancia.actualizarProducto(
-                      id: producto['id'],
-                      nombre: nombre.text.trim(),
-                      descripcion: descripcion.text.trim(),
-                      precio: precioValor,
-                      imagen: producto['imagen'],
-                      categoria: categoria ?? '',
-                      stock: stockValor,
-                    );
-
-                    if (!context.mounted) return;
-
-                    Navigator.pop(context);
-                    cargarProductos();
+                    if (nombre.text.trim().isEmpty ||
+                        categoria == null ||
+                        categoria!.isEmpty) {
+                      _mostrarError(
+                        'Completa el nombre y la categoría',
+                        'Campos obligatorios',
+                      );
+                      return;
+                    }
+                    try {
+                      await _productosFirebase.actualizarProducto(
+                        id: producto['id'].toString(),
+                        nombre: nombre.text.trim(),
+                        descripcion: descripcion.text.trim(),
+                        precio: precioValor,
+                        imagen: producto['imagen']?.toString() ?? '',
+                        categoria: categoria!,
+                        stock: stockValor,
+                      );
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      await cargarProductos();
+                    } catch (e) {
+                      _mostrarError('No se pudo actualizar el producto', e);
+                    }
                   },
                   child: const Text('Guardar'),
                 ),
@@ -368,7 +386,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
   Widget campo(TextEditingController controlador, String texto) {
     final esPrecio = texto == 'Precio';
     final esStock = texto == 'Stock';
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
@@ -391,20 +408,22 @@ class _ProductosAdminState extends State<ProductosAdmin> {
     );
   }
 
-  Future<void> eliminar(int id) async {
-    await DatabaseHelper.instancia.eliminarProducto(id);
-    cargarProductos();
+  Future<void> eliminar(String id) async {
+    try {
+      await _productosFirebase.eliminarProducto(id);
+      await cargarProductos();
+    } catch (e) {
+      _mostrarError('No se pudo eliminar el producto', e);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColores.cremaClaro,
-
       body: Container(
         width: double.infinity,
         height: double.infinity,
-
         // ==========================================
         // FONDO DEGRADADO SUAVE
         // ==========================================
@@ -420,7 +439,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
             stops: [0.0, 0.55, 1.0],
           ),
         ),
-
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -447,12 +465,10 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                               letterSpacing: -0.5,
                             ),
                           ),
-
                           SizedBox(height: 6),
                         ],
                       ),
                     ),
-
                     // ======================================
                     // BOTÓN CREAR
                     // ======================================
@@ -460,21 +476,16 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       height: 42,
                       child: ElevatedButton.icon(
                         onPressed: agregarProducto,
-
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColores.cafeOscuro,
                           foregroundColor: Colors.white,
                           elevation: 0,
-
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(18),
                           ),
                         ),
-
                         icon: const Icon(Icons.add_rounded, size: 19),
-
                         label: const Text(
                           'Crear',
                           style: TextStyle(
@@ -487,9 +498,7 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 17),
-
               // ==========================================
               // BUSCADOR
               // ==========================================
@@ -506,42 +515,33 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       ),
                     ],
                   ),
-
                   child: TextField(
                     controller: buscarController,
                     onChanged: buscarProducto,
-
                     decoration: InputDecoration(
                       hintText: 'Buscar productos...',
-
                       hintStyle: const TextStyle(
                         fontSize: 13,
                         color: AppColores.textoSecundario,
                       ),
-
                       prefixIcon: const Icon(
                         Icons.search_rounded,
                         color: AppColores.cafeOscuro,
                         size: 21,
                       ),
-
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.94),
-
                       contentPadding: const EdgeInsets.symmetric(vertical: 14),
-
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(17),
                         borderSide: BorderSide.none,
                       ),
-
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(17),
                         borderSide: BorderSide(
                           color: AppColores.beige.withOpacity(0.85),
                         ),
                       ),
-
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(17),
                         borderSide: const BorderSide(
@@ -553,7 +553,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 14),
               // ==========================================
               // LISTA DE PRODUCTOS
@@ -568,34 +567,24 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       )
                     : ListView.builder(
                         physics: const BouncingScrollPhysics(),
-
                         padding: const EdgeInsets.fromLTRB(18, 2, 18, 25),
-
                         itemCount: productosFiltrados.length,
-
                         itemBuilder: (context, index) {
                           final producto = productosFiltrados[index];
-
                           final int stock =
                               (producto['stock'] as num?)?.toInt() ?? 0;
-
                           final String imagen =
                               producto['imagen']?.toString() ?? '';
-
                           return Container(
                             height: 105,
                             margin: const EdgeInsets.only(bottom: 11),
-
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.95),
-
                               borderRadius: BorderRadius.circular(17),
-
                               border: Border.all(
                                 color: AppColores.beige.withOpacity(0.75),
                                 width: 0.8,
                               ),
-
                               boxShadow: [
                                 BoxShadow(
                                   color: AppColores.cafeOscuro.withOpacity(
@@ -606,7 +595,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                                 ),
                               ],
                             ),
-
                             child: Row(
                               children: [
                                 // ==================================
@@ -616,33 +604,48 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                                   borderRadius: const BorderRadius.horizontal(
                                     left: Radius.circular(17),
                                   ),
-
                                   child: SizedBox(
                                     width: 95,
                                     height: double.infinity,
-
                                     child: imagen.isNotEmpty
-                                        ? Image.asset(
-                                            imagen,
-                                            fit: BoxFit.cover,
-
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                                  return Container(
-                                                    color: AppColores.beige,
-
-                                                    child: const Icon(
-                                                      Icons.local_cafe_rounded,
-                                                      size: 40,
-                                                      color:
-                                                          AppColores.cafeOscuro,
-                                                    ),
-                                                  );
-                                                },
-                                          )
+                                        ? (imagen.startsWith('https://')
+                                              ? Image.network(
+                                                  imagen,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder:
+                                                      (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) => const Icon(
+                                                        Icons
+                                                            .local_cafe_rounded,
+                                                      ),
+                                                )
+                                              : Image.asset(
+                                                  imagen,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder:
+                                                      (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) {
+                                                        return Container(
+                                                          color:
+                                                              AppColores.beige,
+                                                          child: const Icon(
+                                                            Icons
+                                                                .local_cafe_rounded,
+                                                            size: 40,
+                                                            color: AppColores
+                                                                .cafeOscuro,
+                                                          ),
+                                                        );
+                                                      },
+                                                ))
                                         : Container(
                                             color: AppColores.beige,
-
                                             child: const Icon(
                                               Icons.local_cafe_rounded,
                                               size: 40,
@@ -651,7 +654,6 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                                           ),
                                   ),
                                 ),
-
                                 // ==================================
                                 // INFORMACIÓN
                                 // ==================================
@@ -663,53 +665,41 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                                       5,
                                       8,
                                     ),
-
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
-
                                       children: [
                                         Text(
                                           producto['nombre']?.toString() ??
                                               'Producto',
-
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-
                                           style: const TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w800,
                                             color: AppColores.textoPrincipal,
                                           ),
                                         ),
-
                                         const SizedBox(height: 2),
-
                                         Text(
                                           producto['categoria']?.toString() ??
                                               '',
-
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-
                                           style: const TextStyle(
                                             fontSize: 10.5,
                                             color: AppColores.textoSecundario,
                                           ),
                                         ),
-
                                         const SizedBox(height: 4),
-
                                         Text(
                                           '\$${producto['precio']} MXN',
-
                                           style: const TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w800,
                                             color: AppColores.cafeOscuro,
                                           ),
                                         ),
-
                                         const Spacer(),
                                       ],
                                     ),
@@ -728,15 +718,13 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                                           editarProducto(producto);
                                         },
                                       ),
-
                                       const SizedBox(width: 6),
-
                                       // ELIMINAR
                                       _botonAccionAdmin(
                                         icono: Icons.delete_outline_rounded,
                                         color: Colors.red,
                                         onTap: () {
-                                          eliminar(producto['id']);
+                                          eliminar(producto['id'].toString());
                                         },
                                       ),
                                     ],

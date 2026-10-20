@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
-import '../basedatos/database_helper.dart';
-import '../sesion.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
+import '../servicios/star_coffee_api.dart';
 
 class CarritoScreen extends StatefulWidget {
   const CarritoScreen({super.key});
@@ -11,7 +14,22 @@ class CarritoScreen extends StatefulWidget {
 }
 
 class _CarritoScreenState extends State<CarritoScreen> {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _suscripcion;
   List<Map<String, dynamic>> carrito = [];
+  bool cargando = true;
+  String? errorCarga;
+  final Set<String> _procesando = {};
+  bool _enviandoPedido = false;
+  String? _requestIdPendiente;
+
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  CollectionReference<Map<String, dynamic>>? get _carritoRef {
+    final uid = _uid;
+    if (uid == null) return null;
+    return _db.collection('usuarios').doc(uid).collection('carrito');
+  }
 
   @override
   void initState() {
@@ -19,42 +37,163 @@ class _CarritoScreenState extends State<CarritoScreen> {
     cargarCarrito();
   }
 
-  Future<void> cargarCarrito() async {
-    final usuarioId = Sesion.usuarioId;
-    if (usuarioId == null) return;
-    final datos = await DatabaseHelper.instancia.obtenerCarrito(usuarioId);
+  void cargarCarrito() {
+    _suscripcion?.cancel();
+    final ref = _carritoRef;
+    if (ref == null) {
+      if (mounted)
+        setState(() {
+          cargando = false;
+          errorCarga = 'Inicia sesión para consultar tu carrito';
+        });
+      return;
+    }
+    _suscripcion = ref.snapshots().listen(
+      (snapshot) {
+        final datos = snapshot.docs
+            .map(
+              (doc) => <String, dynamic>{
+                ...doc.data(),
+                'id': doc.id,
+                'productoId': doc.id,
+              },
+            )
+            .toList();
+        if (!mounted) return;
+        setState(() {
+          carrito = datos;
+          cargando = false;
+          errorCarga = null;
+        });
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() {
+          cargando = false;
+          errorCarga = 'No se pudo consultar el carrito: $error';
+        });
+      },
+    );
+  }
+
+  void _mensaje(String texto) {
     if (!mounted) return;
-    setState(() {
-      carrito = datos;
-    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(texto), duration: const Duration(seconds: 3)),
+    );
   }
 
-  Future<void> aumentar(int id) async {
-    await DatabaseHelper.instancia.aumentarCantidad(id);
-    cargarCarrito();
+  Future<void> _cambiarCantidad(String id, int diferencia) async {
+    final ref = _carritoRef;
+    if (ref == null || _procesando.contains(id)) return;
+    setState(() => _procesando.add(id));
+    try {
+      await _db.runTransaction((transaction) async {
+        final documentoRef = ref.doc(id);
+        final documento = await transaction.get(documentoRef);
+        if (!documento.exists) return;
+        final actual = (documento.data()?['cantidad'] as num?)?.toInt() ?? 0;
+        final siguiente = actual + diferencia;
+        if (siguiente <= 0) {
+          transaction.delete(documentoRef);
+        } else {
+          // Firestore valida que no exceda el stock disponible.
+          transaction.update(documentoRef, {'cantidad': siguiente});
+        }
+      });
+    } catch (e) {
+      _mensaje(
+        'No se pudo actualizar la cantidad. Revisa el stock disponible.',
+      );
+      debugPrint('Error al cambiar cantidad: $e');
+    } finally {
+      if (mounted) setState(() => _procesando.remove(id));
+    }
   }
 
-  Future<void> disminuir(int id) async {
-    await DatabaseHelper.instancia.disminuirCantidad(id);
-    cargarCarrito();
+  Future<void> aumentar(String id) => _cambiarCantidad(id, 1);
+  Future<void> disminuir(String id) => _cambiarCantidad(id, -1);
+
+  Future<void> eliminar(String id) async {
+    final ref = _carritoRef;
+    if (ref == null || _procesando.contains(id)) return;
+    setState(() => _procesando.add(id));
+    try {
+      await ref.doc(id).delete();
+    } catch (e) {
+      debugPrint('Error al eliminar producto: $e');
+      _mensaje('No se pudo eliminar el producto');
+    } finally {
+      if (mounted) setState(() => _procesando.remove(id));
+    }
   }
 
-  Future<void> eliminar(int id) async {
-    await DatabaseHelper.instancia.eliminarDelCarrito(id);
-    cargarCarrito();
+  Future<void> _hacerPedido() async {
+    if (_enviandoPedido || carrito.isEmpty || _procesando.isNotEmpty) return;
+    final ids = carrito.map((p) => p['productoId'].toString()).toList();
+    _requestIdPendiente ??= const Uuid().v4();
+    setState(() => _enviandoPedido = true);
+    try {
+      final resultado = await StarCoffeeApi.crearPedido(
+        productoIds: ids,
+        requestId: _requestIdPendiente!,
+      );
+      if (!mounted) return;
+      final id = resultado['pedidoId'].toString();
+      _requestIdPendiente = null;
+      _mensaje('Pedido registrado correctamente: $id ☕');
+      // Firestore actualiza automáticamente el carrito cuando la API elimina los items.
+    } catch (e) {
+      if (mounted) {
+        _mensaje(
+          'No se pudo confirmar el pedido: $e. Si reintentas, se usará la misma solicitud.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enviandoPedido = false);
+    }
   }
 
   double calcularTotal() {
     double total = 0;
-
     for (final producto in carrito) {
-      final precio = (producto['precio'] as num).toDouble();
-      final cantidad = producto['cantidad'] as int;
-
+      final precio = (producto['precio'] as num?)?.toDouble() ?? 0.0;
+      final cantidad = (producto['cantidad'] as num?)?.toInt() ?? 0;
       total += precio * cantidad;
     }
-
     return total;
+  }
+
+  Widget imagenCarrito(String ruta) {
+    Widget respaldo() => Container(
+      width: 75,
+      height: 75,
+      color: AppColores.beige,
+      child: const Icon(Icons.local_cafe, color: AppColores.cafeOscuro),
+    );
+    if (ruta.isEmpty) return respaldo();
+    if (ruta.startsWith('https://')) {
+      return Image.network(
+        ruta,
+        width: 75,
+        height: 75,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => respaldo(),
+      );
+    }
+    return Image.asset(
+      ruta,
+      width: 75,
+      height: 75,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => respaldo(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _suscripcion?.cancel();
+    super.dispose();
   }
 
   @override
@@ -76,7 +215,18 @@ class _CarritoScreenState extends State<CarritoScreen> {
         ),
       ),
 
-      body: carrito.isEmpty
+      body: cargando
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColores.cafeOscuro),
+            )
+          : errorCarga != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(errorCarga!, textAlign: TextAlign.center),
+              ),
+            )
+          : carrito.isEmpty
           ? const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -111,8 +261,10 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     itemCount: carrito.length,
                     itemBuilder: (context, index) {
                       final producto = carrito[index];
-                      final precio = (producto['precio'] as num).toDouble();
-                      final cantidad = producto['cantidad'] as int;
+                      final precio =
+                          (producto['precio'] as num?)?.toDouble() ?? 0.0;
+                      final cantidad =
+                          (producto['cantidad'] as num?)?.toInt() ?? 0;
                       final subtotal = precio * cantidad;
 
                       return Container(
@@ -124,36 +276,9 @@ class _CarritoScreenState extends State<CarritoScreen> {
                             // IMAGEN
                             ClipRRect(
                               borderRadius: BorderRadius.circular(15),
-                              child:
-                                  producto['imagen'] != null &&
-                                      producto['imagen'].toString().isNotEmpty
-                                  ? Image.asset(
-                                      producto['imagen'],
-                                      width: 75,
-                                      height: 75,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) {
-                                            return Container(
-                                              width: 75,
-                                              height: 75,
-                                              color: AppColores.beige,
-                                              child: const Icon(
-                                                Icons.local_cafe,
-                                                color: AppColores.cafeOscuro,
-                                              ),
-                                            );
-                                          },
-                                    )
-                                  : Container(
-                                      width: 75,
-                                      height: 75,
-                                      color: AppColores.beige,
-                                      child: const Icon(
-                                        Icons.local_cafe,
-                                        color: AppColores.cafeOscuro,
-                                      ),
-                                    ),
+                              child: imagenCarrito(
+                                producto['imagen']?.toString() ?? '',
+                              ),
                             ),
 
                             const SizedBox(width: 12),
@@ -164,7 +289,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    producto['nombre'],
+                                    producto['nombre']?.toString() ??
+                                        'Producto',
                                     style: const TextStyle(
                                       fontSize: 17,
                                       fontWeight: FontWeight.bold,
@@ -189,7 +315,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                                     children: [
                                       IconButton(
                                         onPressed: () {
-                                          disminuir(producto['id']);
+                                          disminuir(producto['id'].toString());
                                         },
                                         icon: const Icon(
                                           Icons.remove_circle_outline,
@@ -207,7 +333,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
 
                                       IconButton(
                                         onPressed: () {
-                                          aumentar(producto['id']);
+                                          aumentar(producto['id'].toString());
                                         },
                                         icon: const Icon(
                                           Icons.add_circle_outline,
@@ -226,7 +352,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                               children: [
                                 IconButton(
                                   onPressed: () {
-                                    eliminar(producto['id']);
+                                    eliminar(producto['id'].toString());
                                   },
                                   icon: const Icon(
                                     Icons.delete_outline,
@@ -289,42 +415,12 @@ class _CarritoScreenState extends State<CarritoScreen> {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: carrito.isEmpty
+                          onPressed:
+                              carrito.isEmpty ||
+                                  _enviandoPedido ||
+                                  _procesando.isNotEmpty
                               ? null
-                              : () async {
-                                  final usuarioId = Sesion.usuarioId;
-
-                                  if (usuarioId == null) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Debes iniciar sesión para realizar el pedido',
-                                        ),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  final pedidoId = await DatabaseHelper
-                                      .instancia
-                                      .crearPedido(
-                                        usuarioId: usuarioId,
-                                        total: total,
-                                        productos: carrito,
-                                      );
-                                  if (!context.mounted) return;
-
-                                  await cargarCarrito();
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Pedido #$pedidoId realizado correctamente ☕',
-                                      ),
-                                      duration: const Duration(seconds: 3),
-                                    ),
-                                  );
-                                },
+                              : _hacerPedido,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColores.cafeOscuro,
                             foregroundColor: Colors.white,
@@ -332,8 +428,10 @@ class _CarritoScreenState extends State<CarritoScreen> {
                               borderRadius: BorderRadius.circular(17),
                             ),
                           ),
-                          child: const Text(
-                            'Hacer pedido',
+                          child: Text(
+                            _enviandoPedido
+                                ? 'Registrando pedido...'
+                                : 'Hacer pedido',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

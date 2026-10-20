@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
-import '../basedatos/database_helper.dart';
+import '../Repositorio/promocion_firebase.dart';
 
 class PromocionesAdmin extends StatefulWidget {
   const PromocionesAdmin({super.key});
@@ -10,7 +10,9 @@ class PromocionesAdmin extends StatefulWidget {
 }
 
 class _PromocionesAdminState extends State<PromocionesAdmin> {
+  final PromocionFirebase _repositorio = PromocionFirebase();
   List<Map<String, dynamic>> promociones = [];
+  bool cargando = true;
 
   @override
   void initState() {
@@ -18,101 +20,74 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
     cargarPromociones();
   }
 
-  Future<void> cargarPromociones() async {
-    final datos = await DatabaseHelper.instancia.obtenerPromociones();
+  void _mensaje(String texto) {
     if (!mounted) return;
-    setState(() {
-      promociones = datos;
-    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(texto)));
+  }
+
+  Future<void> cargarPromociones() async {
+    try {
+      final datos = await _repositorio.obtenerPromociones();
+      if (!mounted) return;
+      setState(() {
+        promociones = datos;
+        cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => cargando = false);
+      _mensaje('No se pudieron cargar las promociones: $e');
+    }
   }
 
   Future<void> agregarPromocion() async {
-    final titulo = TextEditingController();
-    final descripcion = TextEditingController();
-    final descuento = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColores.cremaClaro,
-          title: const Text(
-            'Nueva promoción',
-            style: TextStyle(
-              color: AppColores.cafeOscuro,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                campo(titulo, 'Título'),
-                campo(descripcion, 'Descripción'),
-                campo(descuento, 'Descuento %'),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColores.cafeOscuro,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                await DatabaseHelper.instancia.agregarPromocion(
-                  titulo: titulo.text,
-                  descripcion: descripcion.text,
-                  descuento: double.parse(descuento.text),
-                );
-                Navigator.pop(context);
-                cargarPromociones();
-              },
-              child: const Text('Guardar'),
-            ),
-          ],
-        );
-      },
-    );
+    await _formularioPromocion();
   }
 
   Future<void> editarPromocion(Map<String, dynamic> promo) async {
-    final titulo = TextEditingController(text: promo['titulo']);
-    final descripcion = TextEditingController(text: promo['descripcion']);
-    final descuento = TextEditingController(
-      text: promo['descuento'].toString(),
+    await _formularioPromocion(promo: promo);
+  }
+
+  Future<void> _formularioPromocion({Map<String, dynamic>? promo}) async {
+    final titulo = TextEditingController(
+      text: promo?['titulo']?.toString() ?? '',
     );
-    await showDialog(
+    final descripcion = TextEditingController(
+      text: promo?['descripcion']?.toString() ?? '',
+    );
+    final descuento = TextEditingController(
+      text: promo?['descuento']?.toString() ?? '',
+    );
+    bool guardando = false;
+    final editando = promo != null;
+
+    await showDialog<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, actualizarDialogo) => AlertDialog(
           backgroundColor: AppColores.cremaClaro,
-          title: const Text(
-            'Editar promoción',
-            style: TextStyle(
+          title: Text(
+            editando ? 'Editar promoción' : 'Nueva promoción',
+            style: const TextStyle(
               color: AppColores.cafeOscuro,
               fontWeight: FontWeight.bold,
             ),
           ),
           content: SingleChildScrollView(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 campo(titulo, 'Título'),
                 campo(descripcion, 'Descripción'),
-                campo(descuento, 'Descuento %'),
+                campo(descuento, 'Descuento %', numerico: true),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: guardando ? null : () => Navigator.pop(dialogContext),
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
@@ -120,29 +95,79 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                 backgroundColor: AppColores.cafeOscuro,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () async {
-                await DatabaseHelper.instancia.actualizarPromocion(
-                  id: promo['id'],
-                  titulo: titulo.text,
-                  descripcion: descripcion.text,
-                  descuento: double.parse(descuento.text),
-                );
-                Navigator.pop(context);
-                cargarPromociones();
-              },
-              child: const Text('Guardar'),
+              onPressed: guardando
+                  ? null
+                  : () async {
+                      final porcentaje = double.tryParse(
+                        descuento.text.trim().replaceAll(',', '.'),
+                      );
+                      if (titulo.text.trim().isEmpty ||
+                          descripcion.text.trim().isEmpty) {
+                        _mensaje('Completa el título y la descripción');
+                        return;
+                      }
+                      if (porcentaje == null ||
+                          !porcentaje.isFinite ||
+                          porcentaje <= 0 ||
+                          porcentaje > 100) {
+                        _mensaje(
+                          'Ingresa un descuento entre 0 y 100 (mayor a 0)',
+                        );
+                        return;
+                      }
+                      actualizarDialogo(() => guardando = true);
+                      try {
+                        if (editando) {
+                          await _repositorio.actualizarPromocion(
+                            id: promo['id'].toString(),
+                            titulo: titulo.text,
+                            descripcion: descripcion.text,
+                            descuento: porcentaje,
+                          );
+                        } else {
+                          await _repositorio.agregarPromocion(
+                            titulo: titulo.text,
+                            descripcion: descripcion.text,
+                            descuento: porcentaje,
+                          );
+                        }
+                        if (!dialogContext.mounted) return;
+                        Navigator.pop(dialogContext);
+                        await cargarPromociones();
+                        _mensaje(
+                          editando
+                              ? 'Promoción actualizada'
+                              : 'Promoción creada',
+                        );
+                      } catch (e) {
+                        _mensaje('No se pudo guardar la promoción: $e');
+                        if (dialogContext.mounted)
+                          actualizarDialogo(() => guardando = false);
+                      }
+                    },
+              child: Text(guardando ? 'Guardando...' : 'Guardar'),
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
+    titulo.dispose();
+    descripcion.dispose();
+    descuento.dispose();
   }
 
-  Widget campo(TextEditingController controller, String texto) {
+  Widget campo(
+    TextEditingController controller,
+    String texto, {
+    bool numerico = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: controller,
+        keyboardType: numerico
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : TextInputType.text,
         decoration: InputDecoration(
           labelText: texto,
           filled: true,
@@ -153,23 +178,23 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
     );
   }
 
-  Future<void> eliminar(int id) async {
-    await DatabaseHelper.instancia.eliminarPromocion(id);
-    cargarPromociones();
+  Future<void> eliminar(String id) async {
+    try {
+      await _repositorio.eliminarPromocion(id);
+      await cargarPromociones();
+      _mensaje('Promoción eliminada');
+    } catch (e) {
+      _mensaje('No se pudo eliminar la promoción: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColores.cremaClaro,
-
       body: Container(
         width: double.infinity,
         height: double.infinity,
-
-        // ==========================================
-        // FONDO DEGRADADO SUAVE
-        // ==========================================
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -182,14 +207,10 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
             stops: [0.0, 0.55, 1.0],
           ),
         ),
-
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ==========================================
-              // ENCABEZADO
-              // ==========================================
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
                 child: Row(
@@ -212,29 +233,20 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                         ],
                       ),
                     ),
-
-                    // ======================================
-                    // BOTÓN CREAR
-                    // ======================================
                     SizedBox(
                       height: 42,
                       child: ElevatedButton.icon(
                         onPressed: agregarPromocion,
-
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColores.cafeOscuro,
                           foregroundColor: Colors.white,
                           elevation: 0,
-
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(18),
                           ),
                         ),
-
                         icon: const Icon(Icons.add_rounded, size: 19),
-
                         label: const Text(
                           'Crear',
                           style: TextStyle(
@@ -247,17 +259,11 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 22),
-
-              // ==========================================
-              // LISTA DE PROMOCIONES
-              // ==========================================
               Expanded(
-                child: promociones.isEmpty
-                    // ======================================
-                    // SIN PROMOCIONES
-                    // ======================================
+                child: cargando
+                    ? const Center(child: CircularProgressIndicator())
+                    : promociones.isEmpty
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 35),
@@ -277,9 +283,7 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                                   color: AppColores.cafeOscuro,
                                 ),
                               ),
-
                               const SizedBox(height: 15),
-
                               const Text(
                                 'No hay promociones',
                                 style: TextStyle(
@@ -288,9 +292,7 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                                   color: AppColores.textoPrincipal,
                                 ),
                               ),
-
                               const SizedBox(height: 5),
-
                               const Text(
                                 'Crea una promoción para tus clientes.',
                                 textAlign: TextAlign.center,
@@ -303,34 +305,23 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                           ),
                         ),
                       )
-                    // ======================================
-                    // PROMOCIONES
-                    // ======================================
                     : ListView.builder(
                         physics: const BouncingScrollPhysics(),
-
                         padding: const EdgeInsets.fromLTRB(18, 2, 18, 30),
-
                         itemCount: promociones.length,
-
                         itemBuilder: (context, index) {
                           final promo = promociones[index];
-
                           return Container(
                             height: 115,
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(12),
-
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.95),
-
                               borderRadius: BorderRadius.circular(18),
-
                               border: Border.all(
                                 color: AppColores.beige.withOpacity(0.75),
                                 width: 0.8,
                               ),
-
                               boxShadow: [
                                 BoxShadow(
                                   color: AppColores.cafeOscuro.withOpacity(
@@ -341,16 +332,11 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                                 ),
                               ],
                             ),
-
                             child: Row(
                               children: [
-                                // ==================================
-                                // ICONO PROMOCIÓN
-                                // ==================================
                                 Container(
                                   width: 70,
                                   height: 70,
-
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
                                       begin: Alignment.topLeft,
@@ -360,22 +346,15 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                                         AppColores.beige,
                                       ],
                                     ),
-
                                     borderRadius: BorderRadius.circular(17),
                                   ),
-
                                   child: const Icon(
                                     Icons.local_offer_rounded,
                                     size: 33,
                                     color: AppColores.cafeOscuro,
                                   ),
                                 ),
-
                                 const SizedBox(width: 12),
-
-                                // ==================================
-                                // INFORMACIÓN
-                                // ==================================
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -385,54 +364,39 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                                       Text(
                                         promo['titulo']?.toString() ??
                                             'Promoción',
-
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-
                                         style: const TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w800,
                                           color: AppColores.textoPrincipal,
                                         ),
                                       ),
-
                                       const SizedBox(height: 4),
-
                                       Text(
                                         promo['descripcion']?.toString() ?? '',
-
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
-
                                         style: const TextStyle(
                                           fontSize: 11,
                                           height: 1.25,
                                           color: AppColores.textoSecundario,
                                         ),
                                       ),
-
                                       const SizedBox(height: 7),
-
-                                      // ==============================
-                                      // DESCUENTO
-                                      // ==============================
                                       Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 9,
                                           vertical: 4,
                                         ),
-
                                         decoration: BoxDecoration(
                                           color: AppColores.crema,
-
                                           borderRadius: BorderRadius.circular(
                                             10,
                                           ),
                                         ),
-
                                         child: Text(
                                           '${promo['descuento']}% de descuento',
-
                                           style: const TextStyle(
                                             fontSize: 10.5,
                                             fontWeight: FontWeight.w700,
@@ -443,31 +407,21 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                                     ],
                                   ),
                                 ),
-
                                 const SizedBox(width: 7),
-
-                                // ==================================
-                                // EDITAR + ELIMINAR
-                                // ==================================
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     _botonAccionPromo(
                                       icono: Icons.edit_outlined,
                                       color: AppColores.cafeOscuro,
-                                      onTap: () {
-                                        editarPromocion(promo);
-                                      },
+                                      onTap: () => editarPromocion(promo),
                                     ),
-
                                     const SizedBox(width: 6),
-
                                     _botonAccionPromo(
                                       icono: Icons.delete_outline_rounded,
                                       color: Colors.red,
-                                      onTap: () {
-                                        eliminar(promo['id']);
-                                      },
+                                      onTap: () =>
+                                          eliminar(promo['id'].toString()),
                                     ),
                                   ],
                                 ),

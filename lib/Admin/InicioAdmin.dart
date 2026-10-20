@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
-import '../basedatos/database_helper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:star_coffee/Admin/Productos.dart';
 import '../Login.dart';
 
@@ -18,7 +19,12 @@ class _InicioAdminState extends State<InicioAdmin> {
   int totalCategorias = 0;
   int totalPromociones = 0;
 
-  String estadoCafeteria = 'Abierta';
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
+  _suscripciones = [];
+  String? errorCarga;
+
+  // Solo datos de Firestore. Nunca consultamos SQLite en este panel.
 
   final PageController bannerController = PageController();
   Timer? bannerTimer;
@@ -35,9 +41,8 @@ class _InicioAdminState extends State<InicioAdmin> {
   @override
   void initState() {
     super.initState();
-    cargarDatos();
+    escucharDatos();
     iniciarCarrusel();
-    cargarProductos();
   }
 
   void iniciarCarrusel() {
@@ -59,35 +64,111 @@ class _InicioAdminState extends State<InicioAdmin> {
     });
   }
 
-  Future<void> cargarDatos() async {
-    final usuarios = await DatabaseHelper.instancia.obtenerUsuarios();
-    final productos = await DatabaseHelper.instancia.contarProductos();
-    final categorias = await DatabaseHelper.instancia.contarCategorias();
-    final promociones = await DatabaseHelper.instancia.contarPromociones();
+  void escucharDatos() {
+    void informarError(Object error) {
+      if (!mounted) return;
+      setState(
+        () => errorCarga =
+            'No se pudieron cargar algunos datos. Revisa los permisos de Firestore.',
+      );
+      debugPrint('InicioAdmin Firestore: $error');
+    }
 
-    final clientes = usuarios.where((usuario) {
-      return usuario['rol'] == 'cliente';
-    }).toList();
-    if (!mounted) return;
-    setState(() {
-      usuariosRegistrados = clientes.length;
-      totalProductos = productos;
-      totalCategorias = categorias;
-      totalPromociones = promociones;
-    });
+    _suscripciones.add(
+      _db.collection('usuarios').snapshots().listen((snapshot) {
+        if (!mounted) return;
+        setState(() {
+          usuariosRegistrados = snapshot.docs
+              .where((doc) => doc.data()['rol'] == 'cliente')
+              .length;
+        });
+      }, onError: informarError),
+    );
+
+    _suscripciones.add(
+      _db.collection('productos').snapshots().listen((snapshot) {
+        if (!mounted) return;
+        setState(() {
+          productos = snapshot.docs
+              .map((doc) => <String, dynamic>{...doc.data(), 'id': doc.id})
+              .toList();
+          totalProductos = productos.length;
+        });
+      }, onError: informarError),
+    );
+
+    _suscripciones.add(
+      _db.collection('categorias').snapshots().listen((snapshot) {
+        if (!mounted) return;
+        setState(() => totalCategorias = snapshot.docs.length);
+      }, onError: informarError),
+    );
+
+    _suscripciones.add(
+      _db.collection('promociones').snapshots().listen((snapshot) {
+        if (!mounted) return;
+        setState(() {
+          totalPromociones = snapshot.docs.where((doc) {
+            final datos = doc.data();
+            // Compatible con promociones que usan 'activa' o 'activo'.
+            if (datos.containsKey('activa')) return datos['activa'] == true;
+            if (datos.containsKey('activo')) return datos['activo'] == true;
+            return false;
+          }).length;
+        });
+      }, onError: informarError),
+    );
   }
 
-  Future<void> cargarProductos() async {
-    final datos = await DatabaseHelper.instancia.obtenerProductos();
-    if (!mounted) return;
-    setState(() {
-      productos = datos;
-    });
+  Future<void> cerrarSesion() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cerrar sesión: $error')),
+      );
+    }
+  }
+
+  Widget imagenProducto(String ruta) {
+    final alternativa = Container(
+      color: AppColores.beige,
+      child: const Center(
+        child: Icon(
+          Icons.local_cafe_rounded,
+          size: 48,
+          color: AppColores.cafeOscuro,
+        ),
+      ),
+    );
+    if (ruta.isEmpty) return alternativa;
+    if (ruta.startsWith('https://') || ruta.startsWith('http://')) {
+      return Image.network(
+        ruta,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => alternativa,
+      );
+    }
+    return Image.asset(
+      ruta,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => alternativa,
+    );
   }
 
   @override
   void dispose() {
     bannerTimer?.cancel();
+    for (final suscripcion in _suscripciones) {
+      suscripcion.cancel();
+    }
     bannerController.dispose();
     super.dispose();
   }
@@ -163,15 +244,9 @@ class _InicioAdminState extends State<InicioAdmin> {
                                   child: Text('Cerrar sesión'),
                                 ),
                               ],
-                              onSelected: (valor) {
+                              onSelected: (valor) async {
                                 if (valor == 'salir') {
-                                  Navigator.pushAndRemoveUntil(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const Login(),
-                                    ),
-                                    (route) => false,
-                                  );
+                                  await cerrarSesion();
                                 }
                               },
                             ),
@@ -376,32 +451,7 @@ class _InicioAdminState extends State<InicioAdmin> {
                                   child: SizedBox(
                                     width: double.infinity,
 
-                                    child: imagen.isNotEmpty
-                                        ? Image.asset(
-                                            imagen,
-                                            fit: BoxFit.cover,
-
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                                  return Container(
-                                                    color: AppColores.beige,
-                                                    child: const Icon(
-                                                      Icons.local_cafe_rounded,
-                                                      size: 48,
-                                                      color:
-                                                          AppColores.cafeOscuro,
-                                                    ),
-                                                  );
-                                                },
-                                          )
-                                        : Container(
-                                            color: AppColores.beige,
-                                            child: const Icon(
-                                              Icons.local_cafe_rounded,
-                                              size: 48,
-                                              color: AppColores.cafeOscuro,
-                                            ),
-                                          ),
+                                    child: imagenProducto(imagen),
                                   ),
                                 ),
 
