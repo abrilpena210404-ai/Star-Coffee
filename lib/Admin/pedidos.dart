@@ -57,7 +57,7 @@ class _PedidosAdminState extends State<PedidosAdmin> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColores.cremaClaro,
         title: Text(
-          'Pedido #${pedido['id'].toString().length > 8 ? pedido['id'].toString().substring(0, 8).toUpperCase() : pedido['id']}',
+          'Pedido #${pedido['id'].toString().split('_').last.substring(0, 6).toUpperCase()}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(

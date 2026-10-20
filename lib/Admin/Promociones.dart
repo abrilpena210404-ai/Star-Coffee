@@ -1,6 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../Styles/Styles.dart';
 import '../Repositorio/promocion_firebase.dart';
+import 'package:image_picker/image_picker.dart';
+import '../servicios/cloudinary_service.dart';
 
 class PromocionesAdmin extends StatefulWidget {
   const PromocionesAdmin({super.key});
@@ -60,6 +63,9 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
     final descuento = TextEditingController(
       text: promo?['descuento']?.toString() ?? '',
     );
+    XFile? imagenSeleccionada;
+    String imagenUrl = promo?['imagen']?.toString() ?? '';
+    Uint8List? vistaPrevia;
     bool guardando = false;
     final editando = promo != null;
 
@@ -82,6 +88,64 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                 campo(titulo, 'Título'),
                 campo(descripcion, 'Descripción'),
                 campo(descuento, 'Descuento %', numerico: true),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: SizedBox(
+                    height: 130,
+                    width: double.infinity,
+                    child: vistaPrevia != null
+                        ? Image.memory(vistaPrevia!, fit: BoxFit.cover)
+                        : imagenUrl.startsWith('https://')
+                        ? Image.network(
+                            imagenUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.image_not_supported_outlined),
+                          )
+                        : const ColoredBox(
+                            color: AppColores.beige,
+                            child: Center(
+                              child: Icon(
+                                Icons.image_outlined,
+                                size: 42,
+                                color: AppColores.cafeOscuro,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: guardando
+                      ? null
+                      : () async {
+                          try {
+                            final foto = await ImagePicker().pickImage(
+                              source: ImageSource.gallery,
+                              imageQuality: 80,
+                              maxWidth: 1200,
+                            );
+                            if (foto == null) return;
+                            final bytes = await foto.readAsBytes();
+                            if (bytes.length > 5 * 1024 * 1024) {
+                              _mensaje('La imagen no debe superar los 5 MB');
+                              return;
+                            }
+                            if (!dialogContext.mounted) return;
+                            actualizarDialogo(() {
+                              imagenSeleccionada = foto;
+                              vistaPrevia = bytes;
+                            });
+                          } catch (e) {
+                            _mensaje('No se pudo seleccionar la foto: $e');
+                          }
+                        },
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: Text(
+                    editando ? 'Cambiar imagen' : 'Seleccionar imagen',
+                  ),
+                ),
               ],
             ),
           ),
@@ -115,20 +179,31 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                         );
                         return;
                       }
+                      if (!editando && imagenSeleccionada == null) {
+                        _mensaje('Selecciona una imagen para la promoción');
+                        return;
+                      }
                       actualizarDialogo(() => guardando = true);
                       try {
+                        if (imagenSeleccionada != null) {
+                          imagenUrl = await CloudinaryService.subirImagen(
+                            imagenSeleccionada!,
+                          );
+                        }
                         if (editando) {
                           await _repositorio.actualizarPromocion(
                             id: promo['id'].toString(),
                             titulo: titulo.text,
                             descripcion: descripcion.text,
                             descuento: porcentaje,
+                            imagen: imagenUrl,
                           );
                         } else {
                           await _repositorio.agregarPromocion(
                             titulo: titulo.text,
                             descripcion: descripcion.text,
                             descuento: porcentaje,
+                            imagen: imagenUrl,
                           );
                         }
                         if (!dialogContext.mounted) return;
@@ -141,8 +216,9 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                         );
                       } catch (e) {
                         _mensaje('No se pudo guardar la promoción: $e');
-                        if (dialogContext.mounted)
+                        if (dialogContext.mounted) {
                           actualizarDialogo(() => guardando = false);
+                        }
                       }
                     },
               child: Text(guardando ? 'Guardando...' : 'Guardar'),
@@ -151,9 +227,9 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
         ),
       ),
     );
-    titulo.dispose();
-    descripcion.dispose();
-    descuento.dispose();
+    //titulo.dispose();
+    //descripcion.dispose();
+    //descuento.dispose();
   }
 
   Widget campo(
@@ -311,12 +387,19 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                         itemCount: promociones.length,
                         itemBuilder: (context, index) {
                           final promo = promociones[index];
+                          final imagen = promo['imagen']?.toString() ?? '';
+                          final tieneImagen = imagen.startsWith('https://');
                           return Container(
                             height: 115,
                             margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.95),
+                              image: tieneImagen
+                                  ? DecorationImage(
+                                      image: NetworkImage(imagen),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(
                                 color: AppColores.beige.withOpacity(0.75),
@@ -332,100 +415,119 @@ class _PromocionesAdminState extends State<PromocionesAdmin> {
                                 ),
                               ],
                             ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 70,
-                                  height: 70,
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        AppColores.crema,
-                                        AppColores.beige,
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                gradient: tieneImagen
+                                    ? LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          Colors.black.withOpacity(0.35),
+                                          Colors.black.withOpacity(0.7),
+                                        ],
+                                      )
+                                    : null,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 70,
+                                    height: 70,
+                                    decoration: BoxDecoration(
+                                      color: tieneImagen
+                                          ? Colors.white.withOpacity(0.18)
+                                          : AppColores.beige,
+                                      borderRadius: BorderRadius.circular(17),
+                                    ),
+                                    child: Icon(
+                                      Icons.local_offer_rounded,
+                                      size: 33,
+                                      color: tieneImagen
+                                          ? Colors.white
+                                          : AppColores.cafeOscuro,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          promo['titulo']?.toString() ??
+                                              'Promoción',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w800,
+                                            color: tieneImagen
+                                                ? Colors.white
+                                                : AppColores.textoPrincipal,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          promo['descripcion']?.toString() ??
+                                              '',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            height: 1.25,
+                                            color: tieneImagen
+                                                ? Colors.white70
+                                                : AppColores.textoSecundario,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 7),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 9,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColores.crema,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '${promo['descuento']}% de descuento',
+                                            style: const TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColores.cafeOscuro,
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     ),
-                                    borderRadius: BorderRadius.circular(17),
                                   ),
-                                  child: const Icon(
-                                    Icons.local_offer_rounded,
-                                    size: 33,
-                                    color: AppColores.cafeOscuro,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                  const SizedBox(width: 7),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(
-                                        promo['titulo']?.toString() ??
-                                            'Promoción',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                          color: AppColores.textoPrincipal,
-                                        ),
+                                      _botonAccionPromo(
+                                        icono: Icons.edit_outlined,
+                                        color: AppColores.cafeOscuro,
+                                        onTap: () => editarPromocion(promo),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        promo['descripcion']?.toString() ?? '',
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          height: 1.25,
-                                          color: AppColores.textoSecundario,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 7),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 9,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppColores.crema,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '${promo['descuento']}% de descuento',
-                                          style: const TextStyle(
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColores.cafeOscuro,
-                                          ),
-                                        ),
+                                      const SizedBox(width: 6),
+                                      _botonAccionPromo(
+                                        icono: Icons.delete_outline_rounded,
+                                        color: Colors.red,
+                                        onTap: () =>
+                                            eliminar(promo['id'].toString()),
                                       ),
                                     ],
                                   ),
-                                ),
-                                const SizedBox(width: 7),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _botonAccionPromo(
-                                      icono: Icons.edit_outlined,
-                                      color: AppColores.cafeOscuro,
-                                      onTap: () => editarPromocion(promo),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    _botonAccionPromo(
-                                      icono: Icons.delete_outline_rounded,
-                                      color: Colors.red,
-                                      onTap: () =>
-                                          eliminar(promo['id'].toString()),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           );
                         },

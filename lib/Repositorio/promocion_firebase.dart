@@ -21,12 +21,14 @@ class PromocionFirebase {
     required String titulo,
     required String descripcion,
     required double descuento,
+    required String imagen,
   }) async {
     _validar(titulo, descripcion, descuento);
     await _promociones.add({
       'titulo': titulo.trim(),
       'descripcion': descripcion.trim(),
       'descuento': descuento,
+      'imagen': imagen,
       'estado': 'Activa',
     });
   }
@@ -36,12 +38,14 @@ class PromocionFirebase {
     required String titulo,
     required String descripcion,
     required double descuento,
+    required String imagen,
   }) async {
     _validar(titulo, descripcion, descuento);
     await _promociones.doc(id).update({
       'titulo': titulo.trim(),
       'descripcion': descripcion.trim(),
       'descuento': descuento,
+      'imagen': imagen,
     });
   }
 

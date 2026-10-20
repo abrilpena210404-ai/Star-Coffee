@@ -1,10 +1,10 @@
-import 'package:star_coffee/Admin/InicioAdmin.dart';
 import 'package:flutter/material.dart';
 import 'package:star_coffee/Admin/NavegacionAdmin.dart';
 import 'package:star_coffee/Cliente/NavegacionCliente.dart';
 import 'package:star_coffee/Styles/Styles.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'registro.dart';
 import 'sesion.dart';
 
@@ -19,6 +19,7 @@ class _LoginState extends State<Login> {
   final TextEditingController correoController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool ocultarPassword = true;
+  bool iniciandoConGoogle = false;
 
   @override
   void dispose() {
@@ -123,6 +124,114 @@ class _LoginState extends State<Login> {
     }
   }
 
+  // INICIO DE SESIÓN CON GOOGLE (google_sign_in 7.x).
+  Future<void> iniciarSesionConGoogle() async {
+    if (iniciandoConGoogle) return;
+    setState(() => iniciandoConGoogle = true);
+
+    try {
+      final googleSignIn = GoogleSignIn.instance;
+      await googleSignIn.initialize();
+
+      // Muestra el selector de cuentas de Google en Android.
+      final cuentaGoogle = await googleSignIn.authenticate();
+      final autenticacionGoogle = cuentaGoogle.authentication;
+      final idToken = autenticacionGoogle.idToken;
+      if (idToken == null) {
+        throw StateError('No se recibió el token de Google');
+      }
+
+      final credencialGoogle = GoogleAuthProvider.credential(idToken: idToken);
+      final resultado = await FirebaseAuth.instance.signInWithCredential(
+        credencialGoogle,
+      );
+      final usuarioFirebase = resultado.user;
+      if (usuarioFirebase == null) {
+        throw StateError('Firebase no devolvió un usuario');
+      }
+
+      final uid = usuarioFirebase.uid;
+      final referencia = FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(uid);
+      final documento = await referencia.get();
+      Map<String, dynamic> datosUsuario;
+
+      if (!documento.exists) {
+        // Solo las cuentas NUEVAS se registran como clientes.
+        // Los roles de cuentas existentes nunca se sobrescriben.
+        datosUsuario = {
+          'uid': uid,
+          'nombre': usuarioFirebase.displayName ?? 'Cliente',
+          'correo': usuarioFirebase.email ?? '',
+          'telefono': '',
+          'rol': 'cliente',
+          'fechaRegistro': FieldValue.serverTimestamp(),
+        };
+
+        await referencia.set(datosUsuario);
+        // El perfil local usa un valor concreto en lugar del sentinel.
+        datosUsuario = {
+          'uid': uid,
+          'nombre': usuarioFirebase.displayName ?? 'Cliente',
+          'correo': usuarioFirebase.email ?? '',
+          'telefono': '',
+          'rol': 'cliente',
+        };
+      } else {
+        datosUsuario = documento.data() ?? {};
+      }
+
+      final rol = datosUsuario['rol']?.toString() ?? '';
+      if (rol != 'admin' && rol != 'cliente') {
+        throw StateError('El perfil tiene un rol no válido');
+      }
+
+      Sesion.iniciar({...datosUsuario, 'uid': uid});
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => rol == 'admin'
+              ? const Navegacionadmin()
+              : const NavegacionCliente(),
+        ),
+      );
+    } on GoogleSignInException catch (e) {
+      // Cerrar el selector no se considera error.
+      if (e.code == GoogleSignInExceptionCode.canceled) return;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo acceder con Google: ${e.code.name}'),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      await FirebaseAuth.instance.signOut();
+      Sesion.cerrar();
+      if (!mounted) return;
+      final mensaje = e.code == 'account-exists-with-different-credential'
+          ? 'Este correo ya tiene otro método de acceso. Ingresa con el método original.'
+          : 'No se pudo autenticar con Google: ${e.code}';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(mensaje)));
+    } catch (e) {
+      // Evita dejar autenticado a alguien sin perfil validado.
+      await FirebaseAuth.instance.signOut();
+      Sesion.cerrar();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo completar el acceso con Google: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => iniciandoConGoogle = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -202,7 +311,6 @@ class _LoginState extends State<Login> {
               ),
             ),
           ),
-
           // GRANOS DECORATIVOS - ESQUINA INFERIOR IZQUIERDA
           Positioned(
             left: -55,
@@ -495,6 +603,48 @@ class _LoginState extends State<Login> {
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ACCESO CON GOOGLE: no altera el botón Entrar.
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: OutlinedButton.icon(
+                        onPressed: iniciandoConGoogle
+                            ? null
+                            : iniciarSesionConGoogle,
+                        icon: iniciandoConGoogle
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.account_circle_outlined,
+                                color: AppColores.cafeOscuro,
+                              ),
+                        label: Text(
+                          iniciandoConGoogle
+                              ? 'Conectando con Google...'
+                              : 'Continuar con Google',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColores.cafeOscuro,
+                          backgroundColor: Colors.white,
+                          side: BorderSide(color: AppColores.beige),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(17),
                           ),
                         ),
                       ),

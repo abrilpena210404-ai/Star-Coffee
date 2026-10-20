@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import '../Styles/styles.dart';
+import 'Styles/Styles.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Login.dart';
+import 'package:flutter/services.dart';
 
 class Registro extends StatefulWidget {
   const Registro({super.key});
@@ -16,7 +17,8 @@ class _RegistroState extends State<Registro> {
   final TextEditingController correoController = TextEditingController();
   final TextEditingController telefonoController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmarPasswordController =TextEditingController();
+  final TextEditingController confirmarPasswordController =
+      TextEditingController();
 
   bool ocultarPassword = true;
   bool ocultarConfirmarPassword = true;
@@ -31,101 +33,137 @@ class _RegistroState extends State<Registro> {
     confirmarPasswordController.dispose();
     super.dispose();
   }
-  
-Future<void> registrarUsuario() async {
-  final nombre = nombreController.text.trim();
-  final correo = correoController.text.trim();
-  final telefono = telefonoController.text.trim();
-  final password = passwordController.text;
-  final confirmar = confirmarPasswordController.text;
 
-  if (nombre.isEmpty ||
-      correo.isEmpty ||
-      telefono.isEmpty ||
-      password.isEmpty ||
-      confirmar.isEmpty) {
-    mostrarMensaje('Completa todos los campos');
-    return;
-  }
+  Future<void> registrarUsuario() async {
+    if (cargando) return;
 
-  if (password != confirmar) {
-    mostrarMensaje('Las contraseñas no coinciden');
-    return;
-  }
+    final nombre = nombreController.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    final correo = correoController.text.trim().toLowerCase();
+    final telefono = telefonoController.text.trim();
+    final password = passwordController.text;
+    final confirmar = confirmarPasswordController.text;
 
-  if (password.length < 6) {
-    mostrarMensaje(
-      'La contraseña debe tener mínimo 6 caracteres',
-    );
-    return;
-  }
-  if (cargando) return;
-  setState(() {
-    cargando = true;
-  });
-  try {
-    final credencial =
-        await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(
-      email: correo,
-      password: password,
-    );
-
-    final uid = credencial.user!.uid;
-
-    await FirebaseFirestore.instance
-        .collection('usuarios')
-        .doc(uid)
-        .set({
-      'uid': uid,
-      'nombre': nombre,
-      'correo': correo,
-      'telefono': telefono,
-      'rol': 'cliente',
-      'fechaRegistro': FieldValue.serverTimestamp(),
-    });
-
-    // Regresar al inicio de sesión
-    await FirebaseAuth.instance.signOut();
-    if (!mounted) return;
-    mostrarMensaje('Cuenta creada correctamente');
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const Login(),
-      ),
-    );
-  } on FirebaseAuthException catch (e) {
-    if (!mounted) return;
-    if (e.code == 'email-already-in-use') {
-      mostrarMensaje('Este correo ya está registrado');
-    } else if (e.code == 'invalid-email') {
-      mostrarMensaje('Ingresa un correo válido');
-    } else if (e.code == 'weak-password') {
-      mostrarMensaje('La contraseña es demasiado débil');
-    } else {
-      mostrarMensaje('Error de autenticación: ${e.code}');
+    if ([
+      nombre,
+      correo,
+      telefono,
+      password,
+      confirmar,
+    ].any((valor) => valor.isEmpty)) {
+      mostrarMensaje('Completa todos los campos');
+      return;
     }
-  } on FirebaseException catch (e) {
-    if (!mounted) return;
-    mostrarMensaje('No se pudieron guardar los datos: ${e.code}');
-  } catch (e) {
-    if (!mounted) return;
-    mostrarMensaje('Ocurrió un error al registrar la cuenta');
-  } finally {
-    if (mounted) {
-      setState(() {
-        cargando = false;
+    if (nombre.length < 3 || nombre.length > 80) {
+      mostrarMensaje('Ingresa un nombre válido (3 a 80 caracteres)');
+      return;
+    }
+    final correoValido = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    if (!correoValido.hasMatch(correo)) {
+      mostrarMensaje('Ingresa un correo electrónico válido');
+      return;
+    }
+    if (!RegExp(r'^\d{10}$').hasMatch(telefono)) {
+      mostrarMensaje('Ingresa un teléfono de 10 dígitos');
+      return;
+    }
+    if (password.length < 8 ||
+        !RegExp(r'[A-Za-z]').hasMatch(password) ||
+        !RegExp(r'\d').hasMatch(password)) {
+      mostrarMensaje('Usa al menos 8 caracteres, una letra y un número');
+      return;
+    }
+    if (password != confirmar) {
+      mostrarMensaje('Las contraseñas no coinciden');
+      return;
+    }
+
+    setState(() => cargando = true);
+
+    User? cuentaCreada;
+    bool perfilGuardado = false;
+    String? aviso;
+    try {
+      final credencial = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: correo, password: password);
+      cuentaCreada = credencial.user;
+      if (cuentaCreada == null) {
+        throw StateError('Firebase no devolvió la cuenta creada');
+      }
+
+      final uid = cuentaCreada.uid;
+      await FirebaseFirestore.instance.collection('usuarios').doc(uid).set({
+        'uid': uid,
+        'nombre': nombre,
+        'correo': correo,
+        'telefono': telefono,
+        'rol': 'cliente',
+        'fechaRegistro': FieldValue.serverTimestamp(),
       });
+      perfilGuardado = true;
+
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      mostrarMensaje('Cuenta creada correctamente. Ahora inicia sesión.');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+      );
+      return;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'email-already-in-use':
+          aviso = 'Este correo ya está registrado';
+          break;
+        case 'invalid-email':
+          aviso = 'Ingresa un correo válido';
+          break;
+        case 'weak-password':
+          aviso = 'La contraseña es demasiado débil';
+          break;
+        case 'network-request-failed':
+          aviso = 'Sin conexión a internet. Intenta nuevamente';
+          break;
+        case 'operation-not-allowed':
+          aviso = 'El registro por correo no está habilitado';
+          break;
+        case 'too-many-requests':
+          aviso = 'Demasiados intentos. Intenta más tarde';
+          break;
+        default:
+          aviso = 'No se pudo registrar la cuenta (${e.code})';
+      }
+    } on FirebaseException catch (e) {
+      aviso = 'No se pudieron guardar los datos (${e.code})';
+    } catch (_) {
+      aviso = 'Ocurrió un error al registrar la cuenta';
+    } finally {
+      // Si Auth creó una cuenta pero falló Firestore, evitamos en lo
+      // posible dejar una cuenta sin perfil. Si no se puede eliminar,
+      // se informa al usuario para que no vuelva a crearla a ciegas.
+      if (cuentaCreada != null && !perfilGuardado) {
+        try {
+          await cuentaCreada.delete();
+        } catch (_) {
+          aviso =
+              'La cuenta se creó, pero no se guardó el perfil. '
+              'Contacta al administrador antes de intentar registrarte otra vez.';
+        }
+        try {
+          await FirebaseAuth.instance.signOut();
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() => cargando = false);
+        if (aviso != null) mostrarMensaje(aviso);
+      }
     }
   }
-}
-
 
   void mostrarMensaje(String mensaje) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(mensaje)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
@@ -366,6 +404,10 @@ Future<void> registrarUsuario() async {
                             hint: 'Teléfono',
                             icono: Icons.phone_outlined,
                             keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(10),
+                            ],
                           ),
 
                           const SizedBox(height: 13),
@@ -556,6 +598,7 @@ Future<void> registrarUsuario() async {
     required String hint,
     required IconData icono,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     bool obscureText = false,
     Widget? suffixIcon,
     TextCapitalization capitalization = TextCapitalization.none,
@@ -574,6 +617,7 @@ Future<void> registrarUsuario() async {
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
         obscureText: obscureText,
         textCapitalization: capitalization,
         decoration: InputDecoration(

@@ -618,18 +618,6 @@ class _GestionState extends State<Gestion> {
                                 ),
 
                                 const SizedBox(width: 7),
-
-                                // SOLO BASURITA
-                                _botonGestion(
-                                  icono: Icons.delete_outline_rounded,
-                                  color: Colors.red,
-                                  onTap: () {
-                                    mostrarMensaje(
-                                      'La eliminación de cuentas estará disponible '
-                                      'cuando configuremos un proceso seguro en Firebase.',
-                                    );
-                                  },
-                                ),
                               ],
                             ),
                           );

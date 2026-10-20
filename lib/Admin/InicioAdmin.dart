@@ -107,13 +107,11 @@ class _InicioAdminState extends State<InicioAdmin> {
     _suscripciones.add(
       _db.collection('promociones').snapshots().listen((snapshot) {
         if (!mounted) return;
+
         setState(() {
           totalPromociones = snapshot.docs.where((doc) {
             final datos = doc.data();
-            // Compatible con promociones que usan 'activa' o 'activo'.
-            if (datos.containsKey('activa')) return datos['activa'] == true;
-            if (datos.containsKey('activo')) return datos['activo'] == true;
-            return false;
+            return datos['estado'] == 'Activa';
           }).length;
         });
       }, onError: informarError),

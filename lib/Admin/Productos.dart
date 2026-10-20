@@ -3,6 +3,9 @@ import '../Styles/Styles.dart';
 import '../Repositorio/producto_firebase.dart';
 import '../Repositorio/categoria_firebase.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
+import '../Servicios/cloudinary_service.dart';
 
 class ProductosAdmin extends StatefulWidget {
   const ProductosAdmin({super.key});
@@ -78,18 +81,10 @@ class _ProductosAdminState extends State<ProductosAdmin> {
     final descripcion = TextEditingController();
     final precio = TextEditingController();
     final stock = TextEditingController();
-    final imagenes = [
-      {'nombre': 'Latte', 'ruta': 'assets/images/Latte.jpg'},
-      {'nombre': 'Cafe', 'ruta': 'assets/images/Cafe.png'},
-      {'nombre': 'Frappe1', 'ruta': 'assets/images/Frappe1.jpg'},
-      {'nombre': 'pan', 'ruta': 'assets/images/pan.jpg'},
-      {'nombre': 'cuernito', 'ruta': 'assets/images/cuernito.jpg'},
-      {'nombre': 'pastel1', 'ruta': 'assets/images/pastel1.jpg'},
-      {'nombre': 'cheescake', 'ruta': 'assets/images/cheescake.jpg'},
-      {'nombre': 'capuccino', 'ruta': 'assets/images/capuccino.jpg'},
-    ];
     String? categoria;
-    String imagenSeleccionada = '';
+    XFile? fotoSeleccionada;
+    Uint8List? vistaPrevia;
+    bool guardando = false;
     await showDialog(
       context: context,
       builder: (context) {
@@ -138,39 +133,67 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      value: imagenSeleccionada.isEmpty
+                    ElevatedButton.icon(
+                      onPressed: guardando
                           ? null
-                          : imagenSeleccionada,
-                      decoration: InputDecoration(
-                        labelText: 'Imagen del producto',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                      hint: const Text('Selecciona una imagen'),
-                      items: imagenes.map((imagen) {
-                        return DropdownMenuItem<String>(
-                          value: imagen['ruta']!,
-                          child: Text(imagen['nombre']!),
-                        );
-                      }).toList(),
-                      onChanged: (valor) {
-                        cambiarEstado(() {
-                          imagenSeleccionada = valor ?? '';
-                        });
-                      },
+                          : () async {
+                              try {
+                                final foto = await ImagePicker().pickImage(
+                                  source: ImageSource.gallery,
+                                  maxWidth: 1200,
+                                  imageQuality: 80,
+                                );
+                                if (foto == null) return;
+                                final bytes = await foto.readAsBytes();
+                                if (!context.mounted) return;
+                                if (bytes.length > 5 * 1024 * 1024) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'La foto no debe superar 5 MB',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                cambiarEstado(() {
+                                  fotoSeleccionada = foto;
+                                  vistaPrevia = bytes;
+                                });
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'No se pudo seleccionar la foto: $e',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('Seleccionar desde galería'),
                     ),
+                    if (vistaPrevia != null) ...[
+                      const SizedBox(height: 10),
+                      Image.memory(
+                        vistaPrevia!,
+                        height: 120,
+                        fit: BoxFit.cover,
+                      ),
+                      Text(fotoSeleccionada!.name),
+                    ],
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: guardando
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                        },
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
@@ -178,80 +201,92 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                     backgroundColor: AppColores.cafeOscuro,
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: () async {
-                    final precioValor = double.tryParse(precio.text);
-                    final stockValor = int.tryParse(stock.text);
-                    if (precioValor == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Ingresa un precio válido'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (precioValor < 5) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('El precio mínimo es de \$5.00'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (stockValor == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Ingresa un stock válido'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (stockValor < 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('El stock no puede ser negativo'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (nombre.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Ingresa el nombre del producto'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (categoria == null || categoria!.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Selecciona una categoría'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (imagenSeleccionada.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Selecciona una imagen')),
-                      );
-                      return;
-                    }
-                    try {
-                      await _productosFirebase.agregarProducto(
-                        nombre: nombre.text.trim(),
-                        descripcion: descripcion.text.trim(),
-                        precio: precioValor,
-                        imagen: imagenSeleccionada,
-                        categoria: categoria!,
-                        stock: stockValor,
-                      );
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
-                      await cargarProductos();
-                    } catch (e) {
-                      _mostrarError('No se pudo guardar el producto', e);
-                    }
-                  },
-                  child: const Text('Guardar'),
+                  onPressed: guardando
+                      ? null
+                      : () async {
+                          final precioValor = double.tryParse(precio.text);
+                          final stockValor = int.tryParse(stock.text);
+                          if (precioValor == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ingresa un precio válido'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (precioValor < 5) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('El precio mínimo es de \$5.00'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (stockValor == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ingresa un stock válido'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (stockValor < 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('El stock no puede ser negativo'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (nombre.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ingresa el nombre del producto'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (categoria == null || categoria!.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Selecciona una categoría'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (fotoSeleccionada == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Selecciona una imagen'),
+                              ),
+                            );
+                            return;
+                          }
+                          cambiarEstado(() => guardando = true);
+                          try {
+                            final imagenSeleccionada =
+                                await CloudinaryService.subirImagen(
+                                  fotoSeleccionada!,
+                                );
+                            await _productosFirebase.agregarProducto(
+                              nombre: nombre.text.trim(),
+                              descripcion: descripcion.text.trim(),
+                              precio: precioValor,
+                              imagen: imagenSeleccionada,
+                              categoria: categoria!,
+                              stock: stockValor,
+                            );
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                            await cargarProductos();
+                          } catch (e) {
+                            _mostrarError('No se pudo guardar el producto', e);
+                          } finally {
+                            if (context.mounted)
+                              cambiarEstado(() => guardando = false);
+                          }
+                        },
+                  child: Text(guardando ? 'Guardando...' : 'Guardar'),
                 ),
               ],
             );
@@ -269,6 +304,9 @@ class _ProductosAdminState extends State<ProductosAdmin> {
     await cargarCategorias();
     if (!mounted) return;
     String? categoria = producto['categoria'];
+    XFile? fotoNueva;
+    Uint8List? vistaPrevia;
+    bool guardando = false;
     await showDialog(
       context: context,
       builder: (context) {
@@ -301,79 +339,147 @@ class _ProductosAdminState extends State<ProductosAdmin> {
                         });
                       },
                     ),
+                    const SizedBox(height: 15),
+                    ElevatedButton.icon(
+                      onPressed: guardando
+                          ? null
+                          : () async {
+                              try {
+                                final foto = await ImagePicker().pickImage(
+                                  source: ImageSource.gallery,
+                                  maxWidth: 1200,
+                                  imageQuality: 80,
+                                );
+                                if (foto == null) return;
+                                final bytes = await foto.readAsBytes();
+                                if (!context.mounted) return;
+                                if (bytes.length > 5 * 1024 * 1024) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'La foto no debe superar 5 MB',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                cambiarEstado(() {
+                                  fotoNueva = foto;
+                                  vistaPrevia = bytes;
+                                });
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'No se pudo seleccionar la foto: $e',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('Cambiar imagen desde galería'),
+                    ),
+                    if (vistaPrevia != null) ...[
+                      const SizedBox(height: 10),
+                      Image.memory(
+                        vistaPrevia!,
+                        height: 120,
+                        fit: BoxFit.cover,
+                      ),
+                      Text(fotoNueva!.name),
+                    ],
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: guardando
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                        },
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    final precioValor = double.tryParse(precio.text);
-                    final stockValor = int.tryParse(stock.text);
-                    if (precioValor == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Ingresa un precio válido'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (precioValor < 5) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('El precio mínimo es de \$5.00'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (stockValor == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Ingresa un stock válido'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (stockValor < 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('El stock no puede ser negativo'),
-                        ),
-                      );
-                      return;
-                    }
-                    if (nombre.text.trim().isEmpty ||
-                        categoria == null ||
-                        categoria!.isEmpty) {
-                      _mostrarError(
-                        'Completa el nombre y la categoría',
-                        'Campos obligatorios',
-                      );
-                      return;
-                    }
-                    try {
-                      await _productosFirebase.actualizarProducto(
-                        id: producto['id'].toString(),
-                        nombre: nombre.text.trim(),
-                        descripcion: descripcion.text.trim(),
-                        precio: precioValor,
-                        imagen: producto['imagen']?.toString() ?? '',
-                        categoria: categoria!,
-                        stock: stockValor,
-                      );
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
-                      await cargarProductos();
-                    } catch (e) {
-                      _mostrarError('No se pudo actualizar el producto', e);
-                    }
-                  },
-                  child: const Text('Guardar'),
+                  onPressed: guardando
+                      ? null
+                      : () async {
+                          final precioValor = double.tryParse(precio.text);
+                          final stockValor = int.tryParse(stock.text);
+                          if (precioValor == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ingresa un precio válido'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (precioValor < 5) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('El precio mínimo es de \$5.00'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (stockValor == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ingresa un stock válido'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (stockValor < 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('El stock no puede ser negativo'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (nombre.text.trim().isEmpty ||
+                              categoria == null ||
+                              categoria!.isEmpty) {
+                            _mostrarError(
+                              'Completa el nombre y la categoría',
+                              'Campos obligatorios',
+                            );
+                            return;
+                          }
+                          cambiarEstado(() => guardando = true);
+                          try {
+                            final imagenFinal = fotoNueva == null
+                                ? producto['imagen']?.toString() ?? ''
+                                : await CloudinaryService.subirImagen(
+                                    fotoNueva!,
+                                  );
+                            await _productosFirebase.actualizarProducto(
+                              id: producto['id'].toString(),
+                              nombre: nombre.text.trim(),
+                              descripcion: descripcion.text.trim(),
+                              precio: precioValor,
+                              imagen: imagenFinal,
+                              categoria: categoria!,
+                              stock: stockValor,
+                            );
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                            await cargarProductos();
+                          } catch (e) {
+                            _mostrarError(
+                              'No se pudo actualizar el producto',
+                              e,
+                            );
+                          } finally {
+                            if (context.mounted)
+                              cambiarEstado(() => guardando = false);
+                          }
+                        },
+                  child: Text(guardando ? 'Guardando...' : 'Guardar'),
                 ),
               ],
             );

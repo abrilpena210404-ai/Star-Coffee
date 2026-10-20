@@ -999,17 +999,12 @@ class _InicioClienteState extends State<InicioCliente> {
                       itemCount: promociones.length,
                       itemBuilder: (context, index) {
                         final promo = promociones[index];
+                        final imagen = promo['imagen']?.toString() ?? '';
 
                         return Container(
                           width: 230,
                           margin: const EdgeInsets.only(right: 12),
-                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF4A210F), Color(0xFF7A4A2A)],
-                            ),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
@@ -1019,64 +1014,99 @@ class _InicioClienteState extends State<InicioCliente> {
                               ),
                             ],
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.15),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.local_offer_outlined,
-                                      color: Colors.white,
-                                      size: 20,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                // Imagen guardada en Cloudinary
+                                if (imagen.startsWith('https://'))
+                                  Image.network(
+                                    imagen,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        Container(color: AppColores.cafeOscuro),
+                                  )
+                                else
+                                  Container(color: AppColores.cafeOscuro),
+
+                                // Capa para que las letras sean legibles
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.black.withOpacity(0.25),
+                                        Colors.black.withOpacity(0.75),
+                                      ],
                                     ),
                                   ),
+                                ),
 
-                                  const Spacer(),
-
-                                  Text(
-                                    '${promo['descuento']}% OFF',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
-                                    ),
+                                // Información de la promoción
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withOpacity(
+                                                0.15,
+                                              ),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.local_offer_outlined,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            '${promo['descuento']}% OFF',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        promo['titulo']?.toString() ??
+                                            'Promoción',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        promo['descripcion']?.toString() ?? '',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-
-                              const Spacer(),
-
-                              Text(
-                                promo['titulo'] ?? 'Promoción',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
                                 ),
-                              ),
-
-                              const SizedBox(height: 4),
-
-                              Text(
-                                promo['descripcion'] ?? '',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  height: 1.2,
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       },

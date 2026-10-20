@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../Styles/Styles.dart';
 
 class UsuariosAdmin extends StatefulWidget {
@@ -11,28 +13,74 @@ class UsuariosAdmin extends StatefulWidget {
 }
 
 class _UsuariosAdminState extends State<UsuariosAdmin> {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  static const String _api =
+      'https://star-coffee-api.abrilpena210404.workers.dev';
+  final Set<String> _eliminando = {};
 
-  // Obtener únicamente los clientes desde Firebase.
-  Stream<QuerySnapshot<Map<String, dynamic>>> escucharUsuarios() {
-    return _db
-        .collection('usuarios')
-        .where('rol', isEqualTo: 'cliente')
-        .snapshots();
-  }
-
-  // La eliminación definitiva se implementará mediante
-  // Cloudflare para proteger Firebase Authentication.
-  void eliminarUsuario(String uid) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+  Future<void> eliminarUsuario(String uid, String nombre) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColores.cremaClaro,
+        title: const Text('Eliminar cliente'),
         content: Text(
-          'La eliminación de cuentas requiere '
-          'autorización segura desde Cloudflare.',
+          '¿Eliminar definitivamente la cuenta de $nombre? Esta acción no se puede deshacer. Los pedidos históricos se conservarán.',
         ),
-        duration: Duration(seconds: 4),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Sí, eliminar',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
       ),
     );
+    if (confirmar != true || !mounted || _eliminando.contains(uid)) return;
+    setState(() => _eliminando.add(uid));
+    try {
+      final usuario = FirebaseAuth.instance.currentUser;
+      if (usuario == null) throw Exception('Inicia sesión como administrador.');
+      final token = await usuario.getIdToken();
+      if (token == null || token.isEmpty)
+        throw Exception('No se pudo validar tu sesión.');
+      final respuesta = await http
+          .post(
+            Uri.parse('$_api/usuarios/${Uri.encodeComponent(uid)}/eliminar'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+      Map<String, dynamic> datos = {};
+      try {
+        final json = jsonDecode(respuesta.body);
+        if (json is Map) datos = Map<String, dynamic>.from(json);
+      } catch (_) {}
+      if (respuesta.statusCode != 200 || datos['ok'] != true) {
+        throw Exception(
+          datos['mensaje']?.toString() ??
+              'No se pudo eliminar el cliente (HTTP ${respuesta.statusCode}).',
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cliente eliminado correctamente')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _eliminando.remove(uid));
+    }
   }
 
   @override
@@ -51,31 +99,25 @@ class _UsuariosAdminState extends State<UsuariosAdmin> {
         ),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: escucharUsuarios(),
+        stream: FirebaseFirestore.instance
+            .collection('usuarios')
+            .where('rol', isEqualTo: 'cliente')
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'No se pudieron cargar los clientes. '
-                  'Revisa los permisos de Firestore.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColores.cafeOscuro, fontSize: 16),
-                ),
+              child: Text(
+                'No se pudieron cargar los clientes. Verifica los permisos de Firestore.',
+                textAlign: TextAlign.center,
               ),
             );
           }
-
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
+          if (!snapshot.hasData) {
             return const Center(
               child: CircularProgressIndicator(color: AppColores.cafeOscuro),
             );
           }
-
-          final usuarios = snapshot.data?.docs ?? [];
-
+          final usuarios = snapshot.data!.docs;
           if (usuarios.isEmpty) {
             return const Center(
               child: Text(
@@ -84,19 +126,13 @@ class _UsuariosAdminState extends State<UsuariosAdmin> {
               ),
             );
           }
-
           return ListView.builder(
             padding: const EdgeInsets.all(20),
             itemCount: usuarios.length,
             itemBuilder: (context, index) {
-              final documento = usuarios[index];
-              final usuario = documento.data();
-
+              final doc = usuarios[index];
+              final usuario = doc.data();
               final nombre = usuario['nombre']?.toString() ?? 'Sin nombre';
-              final correo = usuario['correo']?.toString() ?? 'Sin correo';
-              final telefono =
-                  usuario['telefono']?.toString() ?? 'Sin teléfono';
-
               return Container(
                 margin: const EdgeInsets.only(bottom: 15),
                 padding: const EdgeInsets.all(18),
@@ -133,13 +169,13 @@ class _UsuariosAdminState extends State<UsuariosAdmin> {
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            correo,
+                            usuario['correo']?.toString() ?? 'Sin correo',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: AppEstilos.subtitulo,
                           ),
                           Text(
-                            telefono,
+                            usuario['telefono']?.toString() ?? 'Sin teléfono',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppEstilos.subtitulo,
@@ -148,11 +184,17 @@ class _UsuariosAdminState extends State<UsuariosAdmin> {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Eliminar usuario',
-                      onPressed: () {
-                        eliminarUsuario(documento.id);
-                      },
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      tooltip: 'Eliminar cliente',
+                      onPressed: _eliminando.contains(doc.id)
+                          ? null
+                          : () => eliminarUsuario(doc.id, nombre),
+                      icon: _eliminando.contains(doc.id)
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_outline, color: Colors.red),
                     ),
                   ],
                 ),
