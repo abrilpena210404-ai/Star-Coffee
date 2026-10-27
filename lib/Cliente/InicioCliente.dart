@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../servicios/star_coffee_api.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'Catalogo.dart';
 import '../Styles/Styles.dart';
@@ -41,7 +40,7 @@ class _InicioClienteState extends State<InicioCliente> {
     'assets/images/banner5.jpg',
     'assets/images/banner6.jpg',
     'assets/images/banner7.jpg',
-    'assets/images/banner2.jpg',
+    'assets/images/banner2.webp',
     'assets/images/banner3.jpg',
   ];
 
@@ -201,10 +200,7 @@ class _InicioClienteState extends State<InicioCliente> {
   }) {
     final bool esFavorito = favoritosIds.contains(productoBD['id']);
 
-    return GestureDetector(
-      onTap: () {
-        mostrarDetalleProducto(productoBD);
-      },
+    return Container(
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.96),
@@ -371,99 +367,6 @@ class _InicioClienteState extends State<InicioCliente> {
     });
   }
 
-  void mostrarDetalleProducto(Map<String, dynamic> producto) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(25),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 80,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: AppColores.beige,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              Center(
-                child: Container(
-                  height: 180,
-                  width: 180,
-                  decoration: BoxDecoration(
-                    color: AppColores.beige,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-
-                  child: producto['imagen'] != null && producto['imagen'] != ''
-                      ? imagenProducto(producto['imagen']?.toString() ?? '')
-                      : const Icon(
-                          Icons.local_cafe,
-                          size: 70,
-                          color: AppColores.cafeOscuro,
-                        ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              Text(
-                producto['nombre'],
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColores.textoPrincipal,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              Text(producto['descripcion'] ?? '', style: AppEstilos.subtitulo),
-              const SizedBox(height: 15),
-              Text(
-                '\$${producto['precio']}',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColores.cafeOscuro,
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    cambiarFavorito(producto);
-                  },
-                  label: const Text('Agregar a favoritos'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColores.cafeOscuro,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   String mensajeClima(double temperatura) {
     if (temperatura >= 28) {
       return 'Hace calor, ¡disfruta algo frío!';
@@ -520,9 +423,7 @@ class _InicioClienteState extends State<InicioCliente> {
     }
 
     final double temperatura = (clima!['main']['temp'] as num).toDouble();
-
-    final String descripcion = clima!['weather'][0]['description'];
-
+    //final String descripcion = clima!['weather'][0]['description'];
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 22),
       padding: const EdgeInsets.all(18),
@@ -847,41 +748,6 @@ class _InicioClienteState extends State<InicioCliente> {
                           ),
                         ),
                       ),
-
-                      TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const CatalogoScreen(),
-                            ),
-                          );
-                        },
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 35),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Ver todos',
-                              style: TextStyle(
-                                color: AppColores.cafeMedio,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            SizedBox(width: 2),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              size: 18,
-                              color: AppColores.cafeMedio,
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -1158,16 +1024,11 @@ class _InicioClienteState extends State<InicioCliente> {
         children: [
           Stack(
             children: [
-              GestureDetector(
-                onTap: () {
-                  mostrarDetalleProducto(productoBD);
-                },
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                  child: imagenProducto(imagen),
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
                 ),
+                child: imagenProducto(imagen),
               ),
 
               Positioned(
