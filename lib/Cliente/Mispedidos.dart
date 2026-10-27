@@ -90,7 +90,11 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
 
   String folioCorto(dynamic id) {
     final texto = id?.toString() ?? '';
-    return texto.length > 8 ? texto.substring(0, 8).toUpperCase() : texto;
+    final identificador = texto.split('_').last;
+
+    return identificador.length > 8
+        ? identificador.substring(0, 8).toUpperCase()
+        : identificador.toUpperCase();
   }
 
   String estadoTexto(String estado) {

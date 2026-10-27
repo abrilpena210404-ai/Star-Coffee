@@ -128,6 +128,98 @@ class _CarritoScreenState extends State<CarritoScreen> {
     }
   }
 
+  Future<void> confirmarPedido() async {
+    if (_enviandoPedido || carrito.isEmpty || _procesando.isNotEmpty) {
+      return;
+    }
+
+    final bool? confirmado = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColores.cremaClaro,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.shopping_bag_outlined, color: AppColores.cafeOscuro),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '¿Confirmas tu pedido?',
+                  style: TextStyle(
+                    color: AppColores.cafeOscuro,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '¿Deseas registrar tu pedido en Star Coffee?',
+                style: TextStyle(
+                  color: AppColores.textoPrincipal,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Total: \$${calcularTotal().toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: AppColores.cafeOscuro,
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Verifica que tus productos y cantidades sean correctos.',
+                style: TextStyle(
+                  color: AppColores.textoSecundario,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(
+                  color: AppColores.textoSecundario,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColores.cafeOscuro,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Confirmar pedido'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmado != true || !mounted) return;
+
+    await _hacerPedido();
+  }
+
   Future<void> _hacerPedido() async {
     if (_enviandoPedido || carrito.isEmpty || _procesando.isNotEmpty) return;
     final ids = carrito.map((p) => p['productoId'].toString()).toList();
@@ -138,10 +230,10 @@ class _CarritoScreenState extends State<CarritoScreen> {
         productoIds: ids,
         requestId: _requestIdPendiente!,
       );
+
       if (!mounted) return;
-      final id = resultado['pedidoId'].toString();
       _requestIdPendiente = null;
-      _mensaje('Pedido registrado correctamente: $id ☕');
+      _mensaje('¡Tu pedido se registró correctamente!');
       // Firestore actualiza automáticamente el carrito cuando la API elimina los items.
     } catch (e) {
       if (mounted) {
@@ -420,7 +512,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
                                   _enviandoPedido ||
                                   _procesando.isNotEmpty
                               ? null
-                              : _hacerPedido,
+                              : confirmarPedido,
+
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColores.cafeOscuro,
                             foregroundColor: Colors.white,

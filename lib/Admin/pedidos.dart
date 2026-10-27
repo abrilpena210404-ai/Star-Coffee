@@ -29,6 +29,15 @@ class _PedidosAdminState extends State<PedidosAdmin> {
     ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
+  String folioCorto(dynamic id) {
+    final texto = id?.toString() ?? '';
+    final identificador = texto.split('_').last;
+
+    return identificador.length > 8
+        ? identificador.substring(0, 8).toUpperCase()
+        : identificador.toUpperCase();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -57,7 +66,7 @@ class _PedidosAdminState extends State<PedidosAdmin> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColores.cremaClaro,
         title: Text(
-          'Pedido #${pedido['id'].toString().split('_').last.substring(0, 6).toUpperCase()}',
+          'Pedido #${folioCorto(pedido['id'])}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -206,7 +215,7 @@ class _PedidosAdminState extends State<PedidosAdmin> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Pedido #${pedido['id']}',
+                            'Pedido #${folioCorto(pedido['id'])}',
                             style: const TextStyle(
                               fontSize: 19,
                               fontWeight: FontWeight.bold,
