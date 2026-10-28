@@ -209,18 +209,23 @@ class _DetalleProductoState extends State<DetalleProducto> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 280,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColores.beige,
-                borderRadius: BorderRadius.circular(25),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(25),
-                child: imagenProducto(producto['imagen']?.toString() ?? ''),
+            AspectRatio(
+              aspectRatio: 1.25,
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppColores.beige,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(25),
+                  child: SizedBox.expand(
+                    child: imagenProducto(producto['imagen']?.toString() ?? ''),
+                  ),
+                ),
               ),
             ),
+
             const SizedBox(height: 25),
             Text(
               producto['nombre']?.toString() ?? 'Producto',
@@ -312,14 +317,21 @@ class _DetalleProductoState extends State<DetalleProducto> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(titulo, style: AppEstilos.subtitulo),
-          Text(
-            valor,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppColores.cafeOscuro,
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Text(
+              valor,
+              textAlign: TextAlign.end,
+              softWrap: true,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColores.cafeOscuro,
+              ),
             ),
           ),
         ],
