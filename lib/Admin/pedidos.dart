@@ -14,6 +14,10 @@ class PedidosAdmin extends StatefulWidget {
 class _PedidosAdminState extends State<PedidosAdmin> {
   List<Map<String, dynamic>> pedidos = [];
   final PedidosFirebase repositorio = PedidosFirebase();
+  bool cargando = true;
+  String? errorCarga;
+  int pestanaActual = 0;
+  int limiteVisible = 20;
   StreamSubscription<List<Map<String, dynamic>>>? _suscripcion;
 
   @override
@@ -46,13 +50,27 @@ class _PedidosAdminState extends State<PedidosAdmin> {
 
   void cargarPedidos() {
     _suscripcion?.cancel();
+    setState(() {
+      cargando = true;
+      errorCarga = null;
+    });
     _suscripcion = repositorio.escucharPedidos().listen(
       (datos) {
         if (!mounted) return;
-        setState(() => pedidos = datos);
+
+        setState(() {
+          pedidos = datos;
+          cargando = false;
+          errorCarga = null;
+        });
       },
       onError: (Object error) {
-        aviso('No se pudieron cargar los pedidos: $error');
+        debugPrint('Error al cargar pedidos del administrador: $error');
+        if (!mounted) return;
+        setState(() {
+          cargando = false;
+          errorCarga = 'No se pudieron cargar los pedidos. Revisa tu conexión.';
+        });
       },
     );
   }
@@ -157,11 +175,38 @@ class _PedidosAdminState extends State<PedidosAdmin> {
         '${valor.month.toString().padLeft(2, '0')}/${valor.year}';
   }
 
+  DateTime fechaPedido(dynamic fecha) {
+    if (fecha is Timestamp) return fecha.toDate();
+    if (fecha is DateTime) return fecha;
+    if (fecha is String) return DateTime.tryParse(fecha) ?? DateTime(1970);
+    return DateTime(1970);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final activos = pedidos.where((p) {
+      final estado = p['estado']?.toString() ?? 'Pendiente';
+      return estado != 'Entregado' && estado != 'Cancelado';
+    }).toList();
+    final entregados = pedidos
+        .where((p) => p['estado'] == 'Entregado')
+        .toList();
+    final cancelados = pedidos
+        .where((p) => p['estado'] == 'Cancelado')
+        .toList();
+
+    final grupos = [activos, entregados, cancelados];
+    final seleccionados = List<Map<String, dynamic>>.from(
+      grupos[pestanaActual],
+    );
+    seleccionados.sort(
+      (a, b) => fechaPedido(b['fecha']).compareTo(fechaPedido(a['fecha'])),
+    );
+    final visibles = seleccionados.take(limiteVisible).toList();
+    final hayMas = seleccionados.length > visibles.length;
+
     return Scaffold(
       backgroundColor: AppColores.cremaClaro,
-
       appBar: AppBar(
         backgroundColor: AppColores.cremaClaro,
         elevation: 0,
@@ -173,120 +218,198 @@ class _PedidosAdminState extends State<PedidosAdmin> {
           ),
         ),
       ),
-
-      body: pedidos.isEmpty
+      body: cargando
           ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.receipt_long_outlined,
-                    size: 70,
-                    color: AppColores.cafeClaro,
-                  ),
-                  SizedBox(height: 15),
-                  Text(
-                    'No hay pedidos',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColores.textoPrincipal,
-                    ),
-                  ),
-                ],
+              child: CircularProgressIndicator(color: AppColores.cafeOscuro),
+            )
+          : errorCarga != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(errorCarga!, textAlign: TextAlign.center),
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: pedidos.length,
-              itemBuilder: (context, index) {
-                final pedido = pedidos[index];
-
-                final total = (pedido['total'] as num).toDouble();
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 15),
-                  padding: const EdgeInsets.all(18),
-                  decoration: AppEstilos.tarjeta(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 4),
+                  child: Row(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Pedido #${folioCorto(pedido['id'])}',
-                            style: const TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.bold,
-                              color: AppColores.cafeOscuro,
+                      for (int i = 0; i < 3; i++)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: OutlinedButton(
+                              onPressed: () => setState(() {
+                                pestanaActual = i;
+                                limiteVisible = 20;
+                              }),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                  vertical: 12,
+                                ),
+                                backgroundColor: pestanaActual == i
+                                    ? AppColores.cafeOscuro
+                                    : AppColores.cremaClaro,
+                                foregroundColor: pestanaActual == i
+                                    ? Colors.white
+                                    : AppColores.cafeOscuro,
+                                side: const BorderSide(
+                                  color: AppColores.cafeOscuro,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '${['Activos', 'Entregados', 'Cancelados'][i]} (${grupos[i].length})',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Text(
-                        'Cliente: ${pedido['cliente'] ?? 'Sin nombre'}',
-                        style: AppEstilos.subtitulo,
-                      ),
-
-                      const SizedBox(height: 5),
-
-                      Text(
-                        'Fecha: ${formatoFecha(pedido['fecha'])}',
-                        style: AppEstilos.subtitulo,
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      Text(
-                        'Total: \$${total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: AppColores.textoPrincipal,
                         ),
-                      ),
-                      const SizedBox(height: 15),
-
-                      Text(
-                        'Estado: ${pedido['estado']}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColores.cafeOscuro,
-                        ),
-                      ),
-
-                      const SizedBox(height: 15),
-
-                      accionesPedido(pedido),
-
-                      const SizedBox(height: 10),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            mostrarDetalle(pedido['id']);
-                          },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColores.cafeOscuro,
-                            side: const BorderSide(
-                              color: AppColores.cafeOscuro,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text('Ver productos'),
-                        ),
-                      ),
                     ],
                   ),
-                );
-              },
+                ),
+                Expanded(
+                  child: seleccionados.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.receipt_long_outlined,
+                                size: 70,
+                                color: AppColores.cafeClaro,
+                              ),
+                              const SizedBox(height: 15),
+                              Text(
+                                [
+                                  'No hay pedidos activos',
+                                  'No hay pedidos entregados',
+                                  'No hay pedidos cancelados',
+                                ][pestanaActual],
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColores.textoPrincipal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(20),
+                          itemCount: visibles.length + (hayMas ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == visibles.length) {
+                              return Center(
+                                child: OutlinedButton(
+                                  onPressed: () => setState(() {
+                                    limiteVisible += 20;
+                                  }),
+                                  child: const Text('Mostrar más pedidos'),
+                                ),
+                              );
+                            }
+                            final pedido = visibles[index];
+                            final total =
+                                (pedido['total'] as num?)?.toDouble() ?? 0.0;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 15),
+                              padding: const EdgeInsets.all(18),
+                              decoration: AppEstilos.tarjeta(),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Pedido #${folioCorto(pedido['id'])}',
+                                        style: const TextStyle(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColores.cafeOscuro,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 12),
+
+                                  Text(
+                                    'Cliente: ${pedido['cliente'] ?? 'Sin nombre'}',
+                                    style: AppEstilos.subtitulo,
+                                  ),
+
+                                  const SizedBox(height: 5),
+
+                                  Text(
+                                    'Fecha: ${formatoFecha(pedido['fecha'])}',
+                                    style: AppEstilos.subtitulo,
+                                  ),
+
+                                  const SizedBox(height: 10),
+
+                                  Text(
+                                    'Total: \$${total.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColores.textoPrincipal,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 15),
+
+                                  Text(
+                                    'Estado: ${pedido['estado']}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColores.cafeOscuro,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 15),
+
+                                  accionesPedido(pedido),
+
+                                  const SizedBox(height: 10),
+
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton(
+                                      onPressed: () {
+                                        mostrarDetalle(pedido['id']);
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColores.cafeOscuro,
+                                        side: const BorderSide(
+                                          color: AppColores.cafeOscuro,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                        ),
+                                      ),
+                                      child: const Text('Ver productos'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
     );
   }
