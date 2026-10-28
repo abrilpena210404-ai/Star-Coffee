@@ -68,10 +68,16 @@ class _RegistroState extends State<Registro> {
     }
     if (password.length < 8 ||
         !RegExp(r'[A-Za-z]').hasMatch(password) ||
-        !RegExp(r'\d').hasMatch(password)) {
-      mostrarMensaje('Usa al menos 8 caracteres, una letra y un número');
+        !RegExp(r'\d').hasMatch(password) ||
+        !RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=;/\\[\]~`]').hasMatch(password)) {
+      mostrarMensaje(
+        'La contraseña debe tener mínimo 8 caracteres, '
+        'una letra, un número y un carácter especial '
+        '(por ejemplo: @, #, ! o *).',
+      );
       return;
     }
+
     if (password != confirmar) {
       mostrarMensaje('Las contraseñas no coinciden');
       return;
