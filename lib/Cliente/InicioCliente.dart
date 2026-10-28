@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'Catalogo.dart';
+import 'package:star_coffee/Cliente/perfil.dart';
 import '../Styles/Styles.dart';
 import '../Login.dart';
 import '../servicios/clima_service.dart';
@@ -585,22 +585,112 @@ class _InicioClienteState extends State<InicioCliente> {
                         ),
 
                         onSelected: (value) async {
-                          if (value == 'cerrar') {
-                            await FirebaseAuth.instance.signOut();
-
-                            Sesion.cerrar();
-
-                            if (!mounted) return;
-
-                            Navigator.pushAndRemoveUntil(
+                          if (value == 'perfil') {
+                            await Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const Login()),
-                              (route) => false,
+                              MaterialPageRoute(
+                                builder: (_) => const MiPerfil(),
+                              ),
                             );
+                            return;
+                          }
+                          if (value == 'cerrar') {
+                            final confirmar = await showDialog<bool>(
+                              context: context,
+                              builder: (dialogContext) => AlertDialog(
+                                backgroundColor: AppColores.cremaClaro,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                title: const Text(
+                                  'Cerrar sesión',
+                                  style: TextStyle(
+                                    color: AppColores.cafeOscuro,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                content: const Text(
+                                  '¿Estás seguro de que deseas cerrar sesión?',
+                                  style: TextStyle(
+                                    color: AppColores.textoPrincipal,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, false),
+                                    child: const Text(
+                                      'Cancelar',
+                                      style: TextStyle(
+                                        color: AppColores.cafeOscuro,
+                                      ),
+                                    ),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColores.cafeOscuro,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: const Text('Cerrar sesión'),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirmar != true || !mounted) return;
+
+                            try {
+                              await FirebaseAuth.instance.signOut();
+                              Sesion.cerrar();
+                              if (!mounted) return;
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const Login(),
+                                ),
+                                (route) => false,
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'No se pudo cerrar sesión. Inténtalo de nuevo.',
+                                  ),
+                                ),
+                              );
+                            }
                           }
                         },
-
                         itemBuilder: (context) => [
+                          const PopupMenuItem<String>(
+                            value: 'perfil',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.person_outline_rounded,
+                                  color: AppColores.cafeOscuro,
+                                  size: 21,
+                                ),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Mi perfil',
+                                  style: TextStyle(
+                                    color: AppColores.textoPrincipal,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuDivider(),
+
                           const PopupMenuItem<String>(
                             value: 'cerrar',
                             child: Row(
