@@ -463,7 +463,7 @@ class _InicioClienteState extends State<InicioCliente> {
                 ),
 
                 Text(
-                  'Ixmiquilpan',
+                  clima!['name']?.toString() ?? 'Ubicación actual',
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColores.textoSecundario,
